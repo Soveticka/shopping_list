@@ -1,184 +1,186 @@
 # Shopping List App
 
-A modern, minimalist shopping list application built with pure HTML, CSS, and JavaScript. Organize your groceries efficiently with a clean, responsive interface.
+A modern, full-stack shopping list application with user authentication, database persistence, and Docker containerization. Built with Python Flask backend and a clean HTML/CSS/JavaScript frontend.
 
 ## Features
 
+### Core Functionality
+- **User Authentication** - Secure registration and login with JWT tokens
+- **Multi-User Support** - Each user has their own shopping lists and data
 - **Categorized Shopping Lists** - Organize items by Produce, Dairy, Meat & Seafood, and more
 - **Smart Item Management** - Add items with quantity, priority levels, and optional notes
+- **Database Persistence** - All data stored in PostgreSQL database
+- **Sample Data** - New users automatically get example shopping lists with sample items
+
+### Advanced Features
 - **Grocery Memory** - Remembers frequently used items with autocomplete suggestions
 - **Intelligent Autocomplete** - Start typing to see suggestions from your purchase history
-- **Search & Filter** - Quickly find items with search functionality and filter by status
-- **Bulk Operations** - Mark multiple items as purchased/needed or delete selected items
-- **Light/Dark Mode** - Toggle between light and dark themes with preference persistence
-- **Responsive Design** - Works seamlessly on desktop, tablet, and mobile devices
-- **Share Functionality** - Share your shopping list via native sharing or clipboard
+- **Search & Filter** - Quickly find items with search functionality
 - **Priority System** - Set High, Medium, or Low priority for items
 - **Quantity Controls** - Adjust item quantities with intuitive +/- buttons
-- **Docker Support** - Easy deployment with Docker containers
+- **Light/Dark Mode** - Toggle between light and dark themes with preference persistence
+- **Responsive Design** - Works seamlessly on desktop, tablet, and mobile devices
+- **Docker Support** - Full containerization with PostgreSQL, Python backend, and Nginx frontend
 
-## Screenshots
+## Architecture
 
-![Shopping List App](screenshot.png)
+### Backend (Python Flask)
+- **Authentication**: JWT-based user authentication
+- **Database**: PostgreSQL with proper schema relationships
+- **API**: RESTful endpoints for all operations
+- **Security**: Password hashing with bcrypt, CORS protection
+
+### Frontend (HTML/CSS/JavaScript)
+- **Modern UI**: Clean, minimalist design with sidebar layout
+- **Authentication Modals**: Registration and login forms
+- **Real-time Updates**: Dynamic content loading via API
+- **Responsive**: Mobile-first design with CSS Grid/Flexbox
+
+### Database Schema
+- **Users**: User accounts with authentication
+- **Shopping Lists**: User-owned shopping lists
+- **Shopping List Items**: Items within lists with categories and metadata
+- **Grocery Memory**: Autocomplete suggestions based on user history
 
 ## Getting Started
 
 ### Prerequisites
-
-**Option 1: Direct Browser Usage**
-- No dependencies required! This is a pure HTML/CSS/JavaScript application.
-
-**Option 2: Docker (Recommended)**
-- Docker and Docker Compose installed on your system
+- Docker and Docker Compose
+- Git
 
 ### Installation
 
-#### Option 1: Direct Browser Usage
-
 1. Clone the repository:
 ```bash
 git clone https://github.com/yourusername/shopping-list.git
 cd shopping-list
 ```
 
-2. Open `shopping-list.html` in your web browser:
+2. Start the application with Docker Compose:
 ```bash
-# On Windows
-start shopping-list.html
-
-# On macOS
-open shopping-list.html
-
-# On Linux
-xdg-open shopping-list.html
-```
-
-#### Option 2: Docker Deployment (Recommended)
-
-1. Clone the repository:
-```bash
-git clone https://github.com/yourusername/shopping-list.git
-cd shopping-list
-```
-
-2. Run with Docker Compose:
-```bash
-# Start the application
 docker-compose up -d
-
-# Or use the convenience script
-chmod +x run-docker.sh
-./run-docker.sh start
 ```
 
 3. Open your browser and go to: `http://localhost:3000`
 
-#### Docker Commands
-
-```bash
-# Start the application
-docker-compose up -d
-
-# Stop the application
-docker-compose down
-
-# View logs
-docker-compose logs -f
-
-# Restart the application
-docker-compose restart
-
-# Check status
-docker-compose ps
-
-# Using the convenience script
-./run-docker.sh [start|stop|logs|restart|status]
-```
+### Docker Services
+- **Frontend**: Nginx serving the HTML application on port 3000
+- **Backend**: Python Flask API server on port 3001  
+- **Database**: PostgreSQL database with automatic schema initialization
 
 ## Usage
 
-### Adding Items
-1. Use the sidebar form to add new items
-2. Enter the item name (required) - start typing to see autocomplete suggestions from your history
-3. Set quantity using +/- buttons or direct input
-4. Choose a category from the dropdown
-5. Set priority level (Low, Medium, High)
-6. Add optional notes
-7. Click "Add to list"
+### User Registration & Login
+1. Open the app and click "Login" to access the authentication modal
+2. New users can register with username, email, and password
+3. Existing users can log in with email and password
+4. New users automatically receive an example shopping list with 5 sample items
 
-### Grocery Memory Features
-- **Autocomplete**: Start typing an item name to see suggestions from previously added items
-- **Smart Suggestions**: Items are ranked by frequency of use and recency
-- **Quick Add**: Click on frequent items in the sidebar to quickly add them to your form
-- **Category Memory**: Previously used categories and priorities are remembered for each item
-- **Usage Statistics**: See how many times you've added each item
+### Managing Shopping Lists
+- **View Lists**: All your shopping lists are automatically loaded
+- **Add Items**: Use the sidebar form to add new items with categories and priorities
+- **Edit Items**: Modify quantities, mark as complete, or delete items
+- **Autocomplete**: Start typing to see suggestions from your purchase history
 
-### Managing Items
-- **Check off items** by clicking the checkbox when purchased
-- **Adjust quantities** using the +/- buttons next to each item
-- **Delete items** using the trash icon
-- **Search items** using the search bar at the top
-- **Filter items** by status (All, Needed, Purchased)
+### Sample Items for New Users
+New users automatically receive a shopping list with these sample items:
+- Milk (Dairy, Medium priority) - "Organic preferred"
+- Bananas (Produce, Low priority) - "Not too ripe"  
+- Chicken Breast (Meat, High priority) - "1 lb package"
+- Bread (Bakery, Medium priority) - "Whole wheat"
+- Greek Yogurt (Dairy, Low priority) - "Vanilla flavor"
 
-### Bulk Operations
-- Use the bulk action buttons to:
-  - Select multiple items
-  - Mark items as purchased/needed
-  - Delete selected items
+## API Endpoints
 
-### Themes
-- Click the sun/moon icon to toggle between light and dark modes
-- Your preference is automatically saved
+### Authentication
+- `POST /api/auth/register` - Register new user
+- `POST /api/auth/login` - Login user
+- `GET /api/auth/me` - Get current user info
 
-### Sharing
-- Click the "Share" button to share your list
-- Uses native sharing on supported devices
-- Falls back to clipboard copy on other devices
+### Shopping Lists
+- `GET /api/lists` - Get user's shopping lists
+- `POST /api/lists` - Create new shopping list
+- `GET /api/lists/{id}` - Get specific list with items
+- `POST /api/lists/{id}/items` - Add item to list
 
-## Categories
+### Grocery Memory
+- `GET /api/groceries/memory` - Get autocomplete suggestions
+- `GET /api/groceries/frequent` - Get frequently used items
+- `GET /api/groceries/stats` - Get usage statistics
 
-The app includes 10 predefined categories:
-- 🥕 Produce
-- 🥛 Dairy
-- 🥩 Meat & Seafood
-- 🥫 Pantry
-- 🧊 Frozen
-- 🍞 Bakery
-- 🥤 Beverages
-- 🍿 Snacks
-- 🧽 Household
-- 💊 Health & Beauty
+## File Structure
+```
+shopping-list/
+├── shopping-list.html          # Frontend application
+├── backend/
+│   ├── app.py                 # Flask API server
+│   ├── requirements.txt       # Python dependencies
+│   ├── Dockerfile            # Backend container config
+│   └── database/
+│       └── schema.sql        # Database schema
+├── docker-compose.yml         # Multi-service orchestration
+├── Dockerfile                 # Frontend container config
+├── nginx.conf                # Nginx configuration
+├── .gitignore               # Git ignore rules
+└── README.md                # This file
+```
+
+## Development
+
+### Docker Commands
+```bash
+# Start all services
+docker-compose up -d
+
+# View logs
+docker-compose logs -f [service_name]
+
+# Rebuild after changes
+docker-compose up --build -d [service_name]
+
+# Stop services
+docker-compose down
+
+# Database access
+docker exec -it shopping-list-db psql -U shopping_user -d shopping_list
+```
+
+### Backend Development
+- Built with Flask and Flask-JWT-Extended
+- PostgreSQL database with psycopg2 driver
+- Bcrypt password hashing
+- CORS enabled for frontend communication
+- Comprehensive error handling and validation
+
+### Frontend Development
+- Vanilla JavaScript with modern ES6+ features
+- CSS Grid/Flexbox responsive layout
+- JWT token management with localStorage
+- RESTful API integration
+- Modern authentication UI with modals
 
 ## Browser Support
-
 - Chrome 80+
 - Firefox 75+
 - Safari 13+
 - Edge 80+
 
-## Development
+## Security Features
+- JWT token-based authentication
+- Password hashing with bcrypt
+- CORS protection
+- SQL injection prevention with parameterized queries
+- Input validation and sanitization
 
-This project was developed using **Claude AI** with **Claude Code** - an AI-powered development assistant that helped create a modern, accessible shopping list application.
+## Troubleshooting
 
-### Development Process
-- **Design**: Created based on modern UI/UX principles with a clean, minimalist approach
-- **Implementation**: Built with semantic HTML, CSS Grid/Flexbox, and vanilla JavaScript
-- **Testing**: Tested across multiple browsers and device sizes
-- **Accessibility**: Designed with keyboard navigation and screen reader support
+### Common Issues
+1. **"No shopping list available"**: Usually resolved by user registration/login
+2. **JWT token errors**: Fixed by ensuring string-based token identities
+3. **Database connection issues**: Check PostgreSQL service status
 
-### File Structure
-```
-shopping-list/
-├── shopping-list.html     # Main application file
-├── Dockerfile            # Docker container configuration
-├── docker-compose.yml    # Docker Compose setup
-├── nginx.conf           # Nginx web server configuration
-├── run-docker.sh        # Docker convenience script
-├── .dockerignore        # Docker ignore rules
-├── README.md            # This file
-├── LICENSE              # MIT License
-└── .gitignore          # Git ignore rules
-```
+### Debug Information
+The backend includes comprehensive logging for troubleshooting user registration and list creation.
 
 ## Contributing
 
@@ -188,18 +190,15 @@ shopping-list/
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
-## Roadmap
+## Future Roadmap
 
-- [x] Grocery memory and autocomplete
-- [x] Docker containerization
-- [ ] Add item templates/favorites
-- [ ] Import/export shopping lists (JSON/CSV)
-- [ ] Meal planning integration
+- [ ] Shared shopping lists between users
+- [ ] Real-time collaboration
+- [ ] Mobile app (PWA)
+- [ ] Import/export functionality
+- [ ] Recipe integration
 - [ ] Shopping history analytics
-- [ ] Barcode scanning (PWA)
-- [ ] Recipe-to-shopping-list conversion
-- [ ] Multi-user support with data sync
-- [ ] API endpoints for external integrations
+- [ ] Barcode scanning
 
 ## License
 
@@ -207,11 +206,14 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Acknowledgments
 
-- Developed with **Claude AI** using **Claude Code**
-- Icons from Feather Icons
-- Design inspiration from modern shopping apps
+- **Developed with Claude AI using Claude Code**
+- PostgreSQL for robust data persistence
+- Flask for the lightweight Python backend
+- Docker for seamless deployment
 - Built for Soveticka
 
 ---
 
-*Made with ❤️ by Claude AI with Claude Code*
+*🤖 Generated with [Claude Code](https://claude.ai/code)*
+
+*Co-Authored-By: Claude <noreply@anthropic.com>*

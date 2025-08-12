@@ -1,0 +1,510 @@
+#!/usr/bin/env python3
+"""
+Shopping List Backend API
+Developed with Claude AI using Claude Code
+"""
+
+import os
+from datetime import datetime, timedelta
+from flask import Flask, request, jsonify
+from flask_cors import CORS
+from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
+import psycopg2
+from psycopg2.extras import RealDictCursor
+import bcrypt
+from dotenv import load_dotenv
+from marshmallow import Schema, fields, ValidationError
+
+# Load environment variables
+load_dotenv()
+
+app = Flask(__name__)
+
+# Configuration
+app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET', 'your-super-secret-jwt-key-change-this-in-production')
+app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(days=7)
+
+# Initialize extensions
+jwt = JWTManager(app)
+CORS(app, origins=os.getenv('FRONTEND_URL', 'http://localhost:3000'))
+
+# Database configuration
+DB_CONFIG = {
+    'host': os.getenv('DB_HOST', 'postgres'),
+    'port': int(os.getenv('DB_PORT', 5432)),
+    'database': os.getenv('DB_NAME', 'shopping_list'),
+    'user': os.getenv('DB_USER', 'shopping_user'),
+    'password': os.getenv('DB_PASSWORD', 'shopping_password')
+}
+
+def get_db_connection():
+    """Get database connection"""
+    try:
+        conn = psycopg2.connect(**DB_CONFIG)
+        return conn
+    except psycopg2.Error as e:
+        print(f"Database connection error: {e}")
+        raise
+
+# Validation schemas
+class UserRegistrationSchema(Schema):
+    username = fields.Str(required=True, validate=lambda x: 3 <= len(x) <= 30)
+    email = fields.Email(required=True)
+    password = fields.Str(required=True, validate=lambda x: len(x) >= 6)
+
+class UserLoginSchema(Schema):
+    email = fields.Email(required=True)
+    password = fields.Str(required=True)
+
+class ShoppingListItemSchema(Schema):
+    name = fields.Str(required=True, validate=lambda x: 1 <= len(x) <= 255)
+    quantity = fields.Int(missing=1, validate=lambda x: x >= 1)
+    category = fields.Str(required=True, validate=lambda x: x in [
+        'produce', 'dairy', 'meat', 'pantry', 'frozen', 
+        'bakery', 'beverages', 'snacks', 'household', 'health'
+    ])
+    priority = fields.Str(missing='low', validate=lambda x: x in ['low', 'medium', 'high'])
+    notes = fields.Str(missing='')
+
+class ShoppingListSchema(Schema):
+    name = fields.Str(missing='My Shopping List', validate=lambda x: 1 <= len(x) <= 255)
+
+# Error handlers
+@app.errorhandler(ValidationError)
+def handle_validation_error(e):
+    return jsonify({'error': 'Validation error', 'details': e.messages}), 400
+
+@app.errorhandler(psycopg2.Error)
+def handle_db_error(e):
+    return jsonify({'error': 'Database error'}), 500
+
+@app.errorhandler(404)
+def handle_not_found(e):
+    return jsonify({'error': 'Endpoint not found'}), 404
+
+@app.errorhandler(500)
+def handle_internal_error(e):
+    return jsonify({'error': 'Internal server error'}), 500
+
+# Health check
+@app.route('/health', methods=['GET'])
+def health_check():
+    return jsonify({
+        'status': 'healthy',
+        'timestamp': datetime.utcnow().isoformat(),
+        'version': '1.0.0'
+    })
+
+# Authentication routes
+@app.route('/api/auth/register', methods=['POST'])
+def register():
+    try:
+        schema = UserRegistrationSchema()
+        data = schema.load(request.json)
+        
+        username = data['username']
+        email = data['email']
+        password = data['password']
+        
+        # Hash password
+        password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+        
+        with get_db_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                # Check if user exists
+                cur.execute("SELECT id FROM users WHERE email = %s OR username = %s", (email, username))
+                if cur.fetchone():
+                    return jsonify({'error': 'User already exists with this email or username'}), 409
+                
+                # Create user
+                cur.execute(
+                    "INSERT INTO users (username, email, password_hash) VALUES (%s, %s, %s) RETURNING id, username, email, created_at",
+                    (username, email, password_hash)
+                )
+                user = cur.fetchone()
+                
+                # Create default shopping list
+                print(f"Creating shopping list for user {user['id']}")
+                cur.execute(
+                    "INSERT INTO shopping_lists (name, owner_id) VALUES (%s, %s) RETURNING id",
+                    ('My Shopping List', user['id'])
+                )
+                list_result = cur.fetchone()
+                list_id = list_result['id']
+                print(f"Created shopping list with ID: {list_id}")
+                
+                # Add sample items to the list
+                sample_items = [
+                    ('Milk', 1, 'dairy', 'medium', 'Organic preferred'),
+                    ('Bananas', 6, 'produce', 'low', 'Not too ripe'),
+                    ('Chicken Breast', 2, 'meat', 'high', '1 lb package'),
+                    ('Bread', 1, 'bakery', 'medium', 'Whole wheat'),
+                    ('Greek Yogurt', 2, 'dairy', 'low', 'Vanilla flavor')
+                ]
+                
+                for item_name, quantity, category, priority, notes in sample_items:
+                    print(f"Adding sample item: {item_name}")
+                    # Add to shopping list
+                    cur.execute("""
+                        INSERT INTO shopping_list_items (list_id, name, quantity, category, priority, notes)
+                        VALUES (%s, %s, %s, %s, %s, %s)
+                    """, (list_id, item_name, quantity, category, priority, notes))
+                    
+                    # Add to grocery memory
+                    cur.execute("""
+                        INSERT INTO grocery_memory (user_id, name, category, priority, usage_count, last_used)
+                        VALUES (%s, %s, %s, %s, 1, CURRENT_TIMESTAMP)
+                        ON CONFLICT (user_id, name) 
+                        DO UPDATE SET 
+                            category = EXCLUDED.category,
+                            priority = EXCLUDED.priority,
+                            usage_count = grocery_memory.usage_count + 1,
+                            last_used = CURRENT_TIMESTAMP
+                    """, (user['id'], item_name, category, priority))
+                
+                print(f"Added {len(sample_items)} sample items to list {list_id}")
+                
+                conn.commit()
+                
+                # Create access token
+                access_token = create_access_token(identity=str(user['id']))
+                
+                return jsonify({
+                    'message': 'User registered successfully',
+                    'user': {
+                        'id': user['id'],
+                        'username': user['username'],
+                        'email': user['email'],
+                        'created_at': user['created_at'].isoformat()
+                    },
+                    'token': access_token
+                }), 201
+                
+    except ValidationError as e:
+        return jsonify({'error': 'Validation error', 'details': e.messages}), 400
+    except Exception as e:
+        print(f"Registration error: {e}")
+        return jsonify({'error': 'Failed to register user'}), 500
+
+@app.route('/api/auth/login', methods=['POST'])
+def login():
+    try:
+        schema = UserLoginSchema()
+        data = schema.load(request.json)
+        
+        email = data['email']
+        password = data['password']
+        
+        with get_db_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(
+                    "SELECT id, username, email, password_hash FROM users WHERE email = %s",
+                    (email,)
+                )
+                user = cur.fetchone()
+                
+                if not user or not bcrypt.checkpw(password.encode('utf-8'), user['password_hash'].encode('utf-8')):
+                    return jsonify({'error': 'Invalid email or password'}), 401
+                
+                # Create access token
+                access_token = create_access_token(identity=str(user['id']))
+                
+                return jsonify({
+                    'message': 'Login successful',
+                    'user': {
+                        'id': user['id'],
+                        'username': user['username'],
+                        'email': user['email']
+                    },
+                    'token': access_token
+                })
+                
+    except ValidationError as e:
+        return jsonify({'error': 'Validation error', 'details': e.messages}), 400
+    except Exception as e:
+        print(f"Login error: {e}")
+        return jsonify({'error': 'Failed to login'}), 500
+
+@app.route('/api/auth/me', methods=['GET'])
+@jwt_required()
+def get_current_user():
+    try:
+        user_id = int(get_jwt_identity())
+        
+        with get_db_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(
+                    "SELECT id, username, email, created_at FROM users WHERE id = %s",
+                    (user_id,)
+                )
+                user = cur.fetchone()
+                
+                if not user:
+                    return jsonify({'error': 'User not found'}), 404
+                
+                return jsonify({
+                    'user': {
+                        'id': user['id'],
+                        'username': user['username'],
+                        'email': user['email'],
+                        'created_at': user['created_at'].isoformat()
+                    }
+                })
+                
+    except Exception as e:
+        print(f"Get user error: {e}")
+        return jsonify({'error': 'Failed to get user info'}), 500
+
+# Grocery memory routes
+@app.route('/api/groceries/memory', methods=['GET'])
+@jwt_required()
+def get_grocery_memory():
+    try:
+        user_id = int(get_jwt_identity())
+        search = request.args.get('search', '')
+        limit = int(request.args.get('limit', 10))
+        
+        with get_db_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                if search:
+                    cur.execute("""
+                        SELECT name, category, priority, usage_count, last_used
+                        FROM grocery_memory 
+                        WHERE user_id = %s AND LOWER(name) LIKE LOWER(%s)
+                        ORDER BY usage_count DESC, last_used DESC 
+                        LIMIT %s
+                    """, (user_id, f'%{search}%', limit))
+                else:
+                    cur.execute("""
+                        SELECT name, category, priority, usage_count, last_used
+                        FROM grocery_memory 
+                        WHERE user_id = %s
+                        ORDER BY usage_count DESC, last_used DESC 
+                        LIMIT %s
+                    """, (user_id, limit))
+                
+                groceries = cur.fetchall()
+                
+                return jsonify({
+                    'groceries': [dict(row) for row in groceries]
+                })
+                
+    except Exception as e:
+        print(f"Get grocery memory error: {e}")
+        return jsonify({'error': 'Failed to get grocery memory'}), 500
+
+@app.route('/api/groceries/frequent', methods=['GET'])
+@jwt_required()
+def get_frequent_groceries():
+    try:
+        user_id = int(get_jwt_identity())
+        limit = int(request.args.get('limit', 8))
+        
+        with get_db_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute("""
+                    SELECT name, category, priority, usage_count, last_used
+                    FROM grocery_memory 
+                    WHERE user_id = %s
+                    ORDER BY usage_count DESC, last_used DESC 
+                    LIMIT %s
+                """, (user_id, limit))
+                
+                groceries = cur.fetchall()
+                
+                return jsonify({
+                    'groceries': [dict(row) for row in groceries]
+                })
+                
+    except Exception as e:
+        print(f"Get frequent groceries error: {e}")
+        return jsonify({'error': 'Failed to get frequent groceries'}), 500
+
+@app.route('/api/groceries/stats', methods=['GET'])
+@jwt_required()
+def get_grocery_stats():
+    try:
+        user_id = int(get_jwt_identity())
+        
+        with get_db_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute("""
+                    SELECT 
+                        COUNT(*) as total_items,
+                        COALESCE(SUM(usage_count), 0) as total_usage,
+                        COALESCE(AVG(usage_count), 0) as avg_usage
+                    FROM grocery_memory 
+                    WHERE user_id = %s
+                """, (user_id,))
+                
+                stats = cur.fetchone()
+                
+                return jsonify({
+                    'stats': {
+                        'totalItems': stats['total_items'],
+                        'totalUsage': stats['total_usage'],
+                        'averageUsage': round(float(stats['avg_usage']), 1)
+                    }
+                })
+                
+    except Exception as e:
+        print(f"Get grocery stats error: {e}")
+        return jsonify({'error': 'Failed to get grocery statistics'}), 500
+
+# Shopping list routes
+@app.route('/api/lists', methods=['GET'])
+@jwt_required()
+def get_shopping_lists():
+    try:
+        user_id = int(get_jwt_identity())
+        
+        with get_db_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute("""
+                    SELECT 
+                        sl.id, sl.name, sl.is_shared, sl.created_at, sl.updated_at,
+                        COUNT(sli.id) as item_count,
+                        COUNT(CASE WHEN sli.completed = true THEN 1 END) as completed_count
+                    FROM shopping_lists sl
+                    LEFT JOIN shopping_list_items sli ON sl.id = sli.list_id
+                    WHERE sl.owner_id = %s
+                    GROUP BY sl.id
+                    ORDER BY sl.updated_at DESC
+                """, (user_id,))
+                
+                lists = cur.fetchall()
+                
+                return jsonify({
+                    'lists': [dict(row) for row in lists]
+                })
+                
+    except Exception as e:
+        print(f"Get shopping lists error: {e}")
+        return jsonify({'error': 'Failed to get shopping lists'}), 500
+
+@app.route('/api/lists', methods=['POST'])
+@jwt_required()
+def create_shopping_list():
+    try:
+        user_id = int(get_jwt_identity())
+        schema = ShoppingListSchema()
+        data = schema.load(request.json or {})
+        
+        name = data['name']
+        
+        with get_db_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute("""
+                    INSERT INTO shopping_lists (name, owner_id)
+                    VALUES (%s, %s)
+                    RETURNING id, name, is_shared, created_at, updated_at
+                """, (name, user_id))
+                
+                list_data = cur.fetchone()
+                conn.commit()
+                
+                return jsonify({
+                    'message': 'Shopping list created',
+                    'list': dict(list_data)
+                }), 201
+                
+    except ValidationError as e:
+        return jsonify({'error': 'Validation error', 'details': e.messages}), 400
+    except Exception as e:
+        print(f"Create shopping list error: {e}")
+        return jsonify({'error': 'Failed to create shopping list'}), 500
+
+@app.route('/api/lists/<int:list_id>', methods=['GET'])
+@jwt_required()
+def get_shopping_list(list_id):
+    try:
+        user_id = int(get_jwt_identity())
+        
+        with get_db_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                # Get list info
+                cur.execute("""
+                    SELECT id, name, is_shared, created_at, updated_at
+                    FROM shopping_lists
+                    WHERE id = %s AND owner_id = %s
+                """, (list_id, user_id))
+                
+                list_data = cur.fetchone()
+                if not list_data:
+                    return jsonify({'error': 'Shopping list not found'}), 404
+                
+                # Get list items
+                cur.execute("""
+                    SELECT id, name, quantity, category, priority, notes, completed, created_at, updated_at
+                    FROM shopping_list_items
+                    WHERE list_id = %s
+                    ORDER BY created_at DESC
+                """, (list_id,))
+                
+                items = cur.fetchall()
+                
+                return jsonify({
+                    'list': {
+                        **dict(list_data),
+                        'items': [dict(item) for item in items]
+                    }
+                })
+                
+    except Exception as e:
+        print(f"Get shopping list error: {e}")
+        return jsonify({'error': 'Failed to get shopping list'}), 500
+
+@app.route('/api/lists/<int:list_id>/items', methods=['POST'])
+@jwt_required()
+def add_list_item(list_id):
+    try:
+        user_id = int(get_jwt_identity())
+        schema = ShoppingListItemSchema()
+        data = schema.load(request.json)
+        
+        with get_db_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                # Verify list ownership
+                cur.execute(
+                    "SELECT id FROM shopping_lists WHERE id = %s AND owner_id = %s",
+                    (list_id, user_id)
+                )
+                if not cur.fetchone():
+                    return jsonify({'error': 'Shopping list not found'}), 404
+                
+                # Add item
+                cur.execute("""
+                    INSERT INTO shopping_list_items (list_id, name, quantity, category, priority, notes)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                    RETURNING id, name, quantity, category, priority, notes, completed, created_at, updated_at
+                """, (list_id, data['name'], data['quantity'], data['category'], data['priority'], data['notes']))
+                
+                item = cur.fetchone()
+                
+                # Update grocery memory
+                cur.execute("""
+                    INSERT INTO grocery_memory (user_id, name, category, priority, usage_count, last_used)
+                    VALUES (%s, %s, %s, %s, 1, CURRENT_TIMESTAMP)
+                    ON CONFLICT (user_id, name) 
+                    DO UPDATE SET 
+                        category = EXCLUDED.category,
+                        priority = EXCLUDED.priority,
+                        usage_count = grocery_memory.usage_count + 1,
+                        last_used = CURRENT_TIMESTAMP
+                """, (user_id, data['name'], data['category'], data['priority']))
+                
+                conn.commit()
+                
+                return jsonify({
+                    'message': 'Item added to shopping list',
+                    'item': dict(item)
+                }), 201
+                
+    except ValidationError as e:
+        return jsonify({'error': 'Validation error', 'details': e.messages}), 400
+    except Exception as e:
+        print(f"Add item error: {e}")
+        return jsonify({'error': 'Failed to add item to shopping list'}), 500
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=int(os.getenv('PORT', 3001)), debug=os.getenv('NODE_ENV') != 'production')

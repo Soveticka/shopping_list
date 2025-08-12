@@ -25,13 +25,18 @@ build_and_run() {
     docker-compose up -d
 
     echo "✅ Application is running!"
-    echo "📱 Open your browser and go to: http://localhost:3000"
+    echo "📱 Frontend: http://localhost:3000"
+    echo "🔧 Backend API: http://localhost:3001"
+    echo "🗄️  Database: PostgreSQL running internally"
     echo ""
     echo "🔧 Useful commands:"
-    echo "   docker-compose logs -f     # View logs"
-    echo "   docker-compose stop        # Stop the application"
-    echo "   docker-compose down        # Stop and remove containers"
-    echo "   docker-compose restart     # Restart the application"
+    echo "   docker-compose logs -f frontend   # View frontend logs"
+    echo "   docker-compose logs -f backend    # View backend logs"
+    echo "   docker-compose logs -f postgres   # View database logs"
+    echo "   docker-compose stop               # Stop the application"
+    echo "   docker-compose down               # Stop and remove containers"
+    echo "   docker-compose down -v            # Stop and remove containers + volumes"
+    echo "   docker-compose restart            # Restart the application"
 }
 
 # Function to stop the application

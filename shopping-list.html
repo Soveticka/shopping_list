@@ -554,6 +554,147 @@
             color: var(--text-secondary);
         }
 
+        /* Authentication Styles */
+        .auth-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 2000;
+        }
+
+        .auth-modal {
+            background: var(--surface);
+            border-radius: 16px;
+            padding: 2rem;
+            width: 90%;
+            max-width: 400px;
+            box-shadow: 0 20px 40px var(--shadow-medium);
+            animation: slideUp 0.3s ease;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .auth-header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .auth-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 0.5rem;
+        }
+
+        .auth-subtitle {
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+        }
+
+        .auth-form {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .auth-form .form-input {
+            padding: 1rem;
+            font-size: 1rem;
+        }
+
+        .auth-submit {
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 1rem;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .auth-submit:hover {
+            background: var(--primary-hover);
+        }
+
+        .auth-submit:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .auth-switch {
+            text-align: center;
+            margin-top: 1rem;
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+        }
+
+        .auth-switch button {
+            background: none;
+            border: none;
+            color: var(--primary-color);
+            cursor: pointer;
+            font-weight: 600;
+            text-decoration: underline;
+        }
+
+        .auth-error {
+            background: rgba(220, 53, 69, 0.1);
+            color: var(--danger);
+            padding: 0.75rem;
+            border-radius: 6px;
+            font-size: 0.875rem;
+            margin-bottom: 1rem;
+            display: none;
+        }
+
+        .auth-success {
+            background: rgba(34, 197, 94, 0.1);
+            color: var(--success);
+            padding: 0.75rem;
+            border-radius: 6px;
+            font-size: 0.875rem;
+            margin-bottom: 1rem;
+            display: none;
+        }
+
+        .loading-state {
+            position: relative;
+            overflow: hidden;
+        }
+
+        .loading-state::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            animation: loading 1.5s infinite;
+        }
+
+        @keyframes loading {
+            0% { left: -100%; }
+            100% { left: 100%; }
+        }
+
         .form-select {
             appearance: none;
             background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%237b8794' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e");
@@ -704,6 +845,7 @@
                 <div class="header-right">
                     <button class="theme-toggle" onclick="toggleTheme()">☀️</button>
                     <button class="share-btn" onclick="shareList()">Share</button>
+                    <button class="share-btn" onclick="logout()" style="background: var(--danger); border-color: var(--danger);">Logout</button>
                 </div>
             </div>
 
@@ -828,6 +970,42 @@
         </div>
     </div>
 
+    <!-- Authentication Modal -->
+    <div class="auth-overlay" id="authOverlay">
+        <div class="auth-modal">
+            <div class="auth-header">
+                <h2 class="auth-title" id="authTitle">Welcome Back</h2>
+                <p class="auth-subtitle" id="authSubtitle">Sign in to access your shopping lists</p>
+            </div>
+
+            <div class="auth-error" id="authError"></div>
+            <div class="auth-success" id="authSuccess"></div>
+
+            <!-- Login Form -->
+            <form class="auth-form" id="loginForm">
+                <input type="email" class="form-input" placeholder="Email" required id="loginEmail">
+                <input type="password" class="form-input" placeholder="Password" required id="loginPassword">
+                <button type="submit" class="auth-submit" id="loginSubmit">Sign In</button>
+                <div class="auth-switch">
+                    Don't have an account? 
+                    <button type="button" onclick="switchToRegister()">Sign up</button>
+                </div>
+            </form>
+
+            <!-- Register Form -->
+            <form class="auth-form" id="registerForm" style="display: none;">
+                <input type="text" class="form-input" placeholder="Username" required id="registerUsername">
+                <input type="email" class="form-input" placeholder="Email" required id="registerEmail">
+                <input type="password" class="form-input" placeholder="Password (min 6 characters)" required id="registerPassword" minlength="6">
+                <button type="submit" class="auth-submit" id="registerSubmit">Create Account</button>
+                <div class="auth-switch">
+                    Already have an account? 
+                    <button type="button" onclick="switchToLogin()">Sign in</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <script>
         const categories = {
             'produce': { name: 'PRODUCE', items: [] },
@@ -842,10 +1020,332 @@
             'health': { name: 'HEALTH & BEAUTY', items: [] }
         };
 
+        // Configuration
+        const API_BASE_URL = 'http://localhost:3001/api';
+        
+        // State
         let itemId = 0;
         let currentFilter = 'all';
-        let groceryMemory = JSON.parse(localStorage.getItem('groceryMemory')) || {};
+        let currentUser = null;
+        let authToken = localStorage.getItem('authToken');
         let selectedSuggestionIndex = -1;
+        let currentListId = null;
+        
+        // Legacy localStorage memory (will be migrated to DB)
+        let groceryMemory = JSON.parse(localStorage.getItem('groceryMemory')) || {};
+
+        // Authentication Functions
+        async function apiRequest(endpoint, options = {}) {
+            const url = `${API_BASE_URL}${endpoint}`;
+            const config = {
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(authToken && { 'Authorization': `Bearer ${authToken}` })
+                },
+                ...options
+            };
+
+            try {
+                const response = await fetch(url, config);
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error || `HTTP ${response.status}`);
+                }
+
+                return data;
+            } catch (error) {
+                console.error('API Request failed:', error);
+                
+                if (error.message.includes('401') || error.message.includes('Invalid token')) {
+                    logout();
+                }
+                
+                throw error;
+            }
+        }
+
+        function showAuthModal() {
+            console.log('Showing auth modal...');
+            document.getElementById('authOverlay').style.display = 'flex';
+        }
+
+        function hideAuthModal() {
+            console.log('Hiding auth modal...');
+            document.getElementById('authOverlay').style.display = 'none';
+            clearAuthError();
+            clearAuthSuccess();
+        }
+
+        function showAuthError(message) {
+            const errorEl = document.getElementById('authError');
+            errorEl.textContent = message;
+            errorEl.style.display = 'block';
+        }
+
+        function clearAuthError() {
+            const errorEl = document.getElementById('authError');
+            errorEl.style.display = 'none';
+        }
+
+        function showAuthSuccess(message) {
+            const successEl = document.getElementById('authSuccess');
+            successEl.textContent = message;
+            successEl.style.display = 'block';
+        }
+
+        function clearAuthSuccess() {
+            const successEl = document.getElementById('authSuccess');
+            successEl.style.display = 'none';
+        }
+
+        function switchToLogin() {
+            document.getElementById('loginForm').style.display = 'block';
+            document.getElementById('registerForm').style.display = 'none';
+            document.getElementById('authTitle').textContent = 'Welcome Back';
+            document.getElementById('authSubtitle').textContent = 'Sign in to access your shopping lists';
+            clearAuthError();
+            clearAuthSuccess();
+        }
+
+        function switchToRegister() {
+            document.getElementById('loginForm').style.display = 'none';
+            document.getElementById('registerForm').style.display = 'block';
+            document.getElementById('authTitle').textContent = 'Create Account';
+            document.getElementById('authSubtitle').textContent = 'Sign up to start organizing your groceries';
+            clearAuthError();
+            clearAuthSuccess();
+        }
+
+        async function login(email, password) {
+            try {
+                const response = await apiRequest('/auth/login', {
+                    method: 'POST',
+                    body: JSON.stringify({ email, password })
+                });
+
+                authToken = response.token;
+                currentUser = response.user;
+                localStorage.setItem('authToken', authToken);
+                
+                // Clear forms
+                document.getElementById('loginEmail').value = '';
+                document.getElementById('loginPassword').value = '';
+                
+                // Hide modal immediately
+                hideAuthModal();
+                
+                // Then initialize app - but don't show modal on error since we just logged in
+                await initializeApp(true);
+                
+            } catch (error) {
+                showAuthError(error.message);
+            }
+        }
+
+        async function register(username, email, password) {
+            try {
+                const response = await apiRequest('/auth/register', {
+                    method: 'POST',
+                    body: JSON.stringify({ username, email, password })
+                });
+
+                // Show success message and switch to login
+                clearAuthError();
+                showAuthSuccess(`Account created successfully! Please sign in with your email: ${response.user.email}`);
+                
+                // Clear the registration form
+                document.getElementById('registerUsername').value = '';
+                document.getElementById('registerEmail').value = '';
+                document.getElementById('registerPassword').value = '';
+                
+                // Switch to login form (but keep success message visible)
+                document.getElementById('loginForm').style.display = 'block';
+                document.getElementById('registerForm').style.display = 'none';
+                document.getElementById('authTitle').textContent = 'Welcome Back';
+                document.getElementById('authSubtitle').textContent = 'Sign in to access your shopping lists';
+                
+                // Pre-fill email in login form
+                document.getElementById('loginEmail').value = response.user.email;
+                
+            } catch (error) {
+                showAuthError(error.message);
+            }
+        }
+
+        function logout() {
+            authToken = null;
+            currentUser = null;
+            currentListId = null;
+            localStorage.removeItem('authToken');
+            
+            // Clear UI
+            categories.produce.items = [];
+            categories.dairy.items = [];
+            categories.meat.items = [];
+            categories.pantry.items = [];
+            categories.frozen.items = [];
+            categories.bakery.items = [];
+            categories.beverages.items = [];
+            categories.snacks.items = [];
+            categories.household.items = [];
+            categories.health.items = [];
+            
+            renderCategories();
+            updateStats();
+            renderMemoryStats();
+            renderFrequentItems();
+            
+            showAuthModal();
+        }
+
+        async function loadGroceryMemory() {
+            try {
+                const response = await apiRequest('/groceries/memory?limit=100');
+                groceryMemory = {};
+                
+                response.groceries.forEach(item => {
+                    groceryMemory[item.name.toLowerCase()] = {
+                        name: item.name,
+                        category: item.category,
+                        priority: item.priority,
+                        count: item.usage_count,
+                        lastUsed: new Date(item.last_used).getTime()
+                    };
+                });
+                
+                renderMemoryStats();
+                renderFrequentItems();
+            } catch (error) {
+                console.error('Failed to load grocery memory:', error);
+            }
+        }
+
+        async function loadShoppingList() {
+            try {
+                console.log('Loading shopping lists...');
+                const listsResponse = await apiRequest('/lists');
+                const userLists = listsResponse.lists;
+                
+                console.log('User lists:', userLists);
+                
+                if (!userLists || userLists.length === 0) {
+                    console.log('No lists found, creating default list...');
+                    // Create default list
+                    const newListResponse = await apiRequest('/lists', {
+                        method: 'POST',
+                        body: JSON.stringify({ name: 'My Shopping List' })
+                    });
+                    currentListId = newListResponse.list.id;
+                    console.log('Created new list with ID:', currentListId);
+                } else {
+                    currentListId = userLists[0].id;
+                    console.log('Using existing list with ID:', currentListId);
+                }
+                
+                // Ensure currentListId is set
+                if (!currentListId) {
+                    throw new Error('Failed to get or create shopping list ID');
+                }
+                
+                // Load list items
+                console.log('Loading items for list:', currentListId);
+                const listResponse = await apiRequest(`/lists/${currentListId}`);
+                const list = listResponse.list;
+                
+                console.log('Loaded list:', list);
+                
+                // Clear existing items
+                Object.keys(categories).forEach(cat => {
+                    categories[cat].items = [];
+                });
+                
+                // Populate items from database
+                if (list.items && list.items.length > 0) {
+                    console.log('Populating', list.items.length, 'items');
+                    list.items.forEach(item => {
+                        if (categories[item.category]) {
+                            categories[item.category].items.push({
+                                id: item.id,
+                                name: item.name,
+                                quantity: item.quantity,
+                                priority: item.priority,
+                                notes: item.notes || '',
+                                completed: item.completed
+                            });
+                        }
+                    });
+                } else {
+                    console.log('No items found in list');
+                }
+                
+                renderCategories();
+                updateStats();
+                
+                console.log('Shopping list loaded successfully, currentListId:', currentListId);
+                
+            } catch (error) {
+                console.error('Failed to load shopping list:', error);
+                currentListId = null;
+                throw error; // Re-throw so initializeApp knows there was an error
+            }
+        }
+
+        async function initializeApp(skipModalOnError = false) {
+            if (!authToken) {
+                if (!skipModalOnError) {
+                    showAuthModal();
+                }
+                return;
+            }
+
+            try {
+                console.log('Initializing app with token:', authToken ? 'present' : 'missing');
+                
+                // Verify token and get user info
+                const response = await apiRequest('/auth/me');
+                currentUser = response.user;
+                
+                console.log('User verified:', currentUser);
+                
+                // Load user data
+                console.log('Loading user data...');
+                try {
+                    await loadGroceryMemory();
+                } catch (error) {
+                    console.warn('Failed to load grocery memory:', error);
+                }
+                
+                try {
+                    await loadShoppingList();
+                } catch (error) {
+                    console.error('Failed to load shopping list:', error);
+                    // Try to create a new list if loading failed
+                    try {
+                        console.log('Attempting to create emergency list...');
+                        const newListResponse = await apiRequest('/lists', {
+                            method: 'POST',
+                            body: JSON.stringify({ name: 'My Shopping List' })
+                        });
+                        currentListId = newListResponse.list.id;
+                        console.log('Created emergency list with ID:', currentListId);
+                    } catch (createError) {
+                        console.error('Failed to create emergency list:', createError);
+                        currentListId = null;
+                    }
+                }
+                
+                console.log('After loading, currentListId:', currentListId);
+                
+                console.log('App initialized successfully');
+                
+            } catch (error) {
+                console.error('Failed to initialize app:', error);
+                if (!skipModalOnError) {
+                    logout();
+                }
+            }
+        }
 
         function toggleTheme() {
             const body = document.body;
@@ -985,8 +1485,19 @@
             document.getElementById('itemName').focus();
         }
 
-        function addItem(event) {
+        async function addItem(event) {
             event.preventDefault();
+            
+            console.log('Adding item, currentListId:', currentListId);
+            console.log('authToken:', authToken ? 'present' : 'missing');
+            console.log('currentUser:', currentUser);
+            
+            if (!currentListId) {
+                console.error('No currentListId available');
+                console.error('Debug info:', { authToken: !!authToken, currentUser, currentListId });
+                alert('No shopping list available. currentListId: ' + currentListId);
+                return;
+            }
             
             const name = document.getElementById('itemName').value.trim();
             const quantity = parseInt(document.getElementById('itemQuantity').value);
@@ -994,31 +1505,59 @@
             const notes = document.getElementById('itemNotes').value.trim();
             const category = document.getElementById('itemCategory').value;
 
-            if (!name) return;
+            console.log('Item data:', { name, quantity, priority, notes, category });
 
-            const newItem = {
-                id: ++itemId,
-                name,
-                quantity,
-                priority,
-                notes,
-                completed: false,
-                category
-            };
+            if (!name) {
+                alert('Please enter an item name');
+                return;
+            }
 
-            // Save to memory for future autocomplete
-            saveToMemory(newItem);
+            try {
+                console.log('Making API request to add item...');
+                const response = await apiRequest(`/lists/${currentListId}/items`, {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        name,
+                        quantity,
+                        category,
+                        priority,
+                        notes
+                    })
+                });
 
-            categories[category].items.push(newItem);
-            
-            // Clear form
-            document.getElementById('itemName').value = '';
-            document.getElementById('itemQuantity').value = '1';
-            document.getElementById('itemPriority').value = 'low';
-            document.getElementById('itemNotes').value = '';
-            
-            renderCategories();
-            updateStats();
+                console.log('API response:', response);
+                const newItem = response.item;
+                
+                // Add to local state
+                categories[category].items.push({
+                    id: newItem.id,
+                    name: newItem.name,
+                    quantity: newItem.quantity,
+                    priority: newItem.priority,
+                    notes: newItem.notes || '',
+                    completed: newItem.completed
+                });
+                
+                console.log('Item added to local state');
+                
+                // Clear form
+                document.getElementById('itemName').value = '';
+                document.getElementById('itemQuantity').value = '1';
+                document.getElementById('itemPriority').value = 'low';
+                document.getElementById('itemNotes').value = '';
+                
+                renderCategories();
+                updateStats();
+                
+                // Refresh memory
+                await loadGroceryMemory();
+                
+                console.log('Item added successfully');
+                
+            } catch (error) {
+                console.error('Failed to add item:', error);
+                alert('Failed to add item: ' + error.message);
+            }
         }
 
         function toggleItem(categoryId, itemId) {
@@ -1244,22 +1783,47 @@
             }
         });
 
-        // Add sample data
-        categories.produce.items.push(
-            { id: ++itemId, name: 'kkk', quantity: 3, priority: 'low', notes: '', completed: false },
-            { id: ++itemId, name: 'Bananas', quantity: 6, priority: 'low', notes: '', completed: false }
-        );
+        // Sample data will be loaded from database after authentication
 
-        categories.dairy.items.push(
-            { id: ++itemId, name: 'Milk', quantity: 2, priority: 'medium', notes: '', completed: false }
-        );
+        // Authentication form event listeners
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('loginEmail').value;
+            const password = document.getElementById('loginPassword').value;
+            
+            const submitBtn = document.getElementById('loginSubmit');
+            submitBtn.disabled = true;
+            submitBtn.classList.add('loading-state');
+            submitBtn.textContent = 'Signing in...';
+            
+            await login(email, password);
+            
+            submitBtn.disabled = false;
+            submitBtn.classList.remove('loading-state');
+            submitBtn.textContent = 'Sign In';
+        });
+
+        document.getElementById('registerForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const username = document.getElementById('registerUsername').value;
+            const email = document.getElementById('registerEmail').value;
+            const password = document.getElementById('registerPassword').value;
+            
+            const submitBtn = document.getElementById('registerSubmit');
+            submitBtn.disabled = true;
+            submitBtn.classList.add('loading-state');
+            submitBtn.textContent = 'Creating account...';
+            
+            await register(username, email, password);
+            
+            submitBtn.disabled = false;
+            submitBtn.classList.remove('loading-state');
+            submitBtn.textContent = 'Create Account';
+        });
 
         // Initialize
         loadTheme();
-        renderCategories();
-        updateStats();
-        renderMemoryStats();
-        renderFrequentItems();
+        initializeApp();
     </script>
 </body>
 </html>
