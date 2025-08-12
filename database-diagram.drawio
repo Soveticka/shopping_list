@@ -1,0 +1,153 @@
+<mxfile host="app.diagrams.net" modified="2025-08-12T18:50:00.000Z" agent="Claude Code" etag="database-erd-v1" version="24.2.5">
+  <diagram name="Shopping List Database Schema" id="shopping-list-db">
+    <mxGraphModel dx="1422" dy="794" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="827" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        
+        <!-- Title -->
+        <mxCell id="title" value="Shopping List Database Schema" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=20;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="400" y="30" width="300" height="30" as="geometry" />
+        </mxCell>
+        
+        <!-- Users Table -->
+        <mxCell id="users-table" value="" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
+          <mxGeometry x="80" y="100" width="200" height="190" as="geometry" />
+        </mxCell>
+        <mxCell id="users-title" value="users" style="text;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontStyle=1;fontSize=14;" vertex="1" parent="users-table">
+          <mxGeometry y="30" width="200" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="users-fields" value="🔑 id (SERIAL PRIMARY KEY)&#xa;📧 username (VARCHAR UNIQUE)&#xa;📧 email (VARCHAR UNIQUE)&#xa;🔒 password_hash (VARCHAR)&#xa;📅 created_at (TIMESTAMP)&#xa;📅 updated_at (TIMESTAMP)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=10;spacingLeft=10;" vertex="1" parent="users-table">
+          <mxGeometry y="60" width="200" height="130" as="geometry" />
+        </mxCell>
+
+        <!-- Shopping Lists Table -->
+        <mxCell id="lists-table" value="" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="400" y="100" width="220" height="190" as="geometry" />
+        </mxCell>
+        <mxCell id="lists-title" value="shopping_lists" style="text;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontStyle=1;fontSize=14;" vertex="1" parent="lists-table">
+          <mxGeometry y="30" width="220" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="lists-fields" value="🔑 id (SERIAL PRIMARY KEY)&#xa;📝 name (VARCHAR)&#xa;👤 owner_id (INTEGER FK → users.id)&#xa;🔗 is_shared (BOOLEAN)&#xa;📅 created_at (TIMESTAMP)&#xa;📅 updated_at (TIMESTAMP)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=10;spacingLeft=10;" vertex="1" parent="lists-table">
+          <mxGeometry y="60" width="220" height="130" as="geometry" />
+        </mxCell>
+
+        <!-- Shopping List Items Table -->
+        <mxCell id="items-table" value="" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="720" y="100" width="250" height="230" as="geometry" />
+        </mxCell>
+        <mxCell id="items-title" value="shopping_list_items" style="text;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontStyle=1;fontSize=14;" vertex="1" parent="items-table">
+          <mxGeometry y="30" width="250" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="items-fields" value="🔑 id (SERIAL PRIMARY KEY)&#xa;📋 list_id (INTEGER FK → shopping_lists.id)&#xa;📝 name (VARCHAR)&#xa;🔢 quantity (INTEGER)&#xa;🏷️ category (VARCHAR)&#xa;⭐ priority (VARCHAR)&#xa;📝 notes (TEXT)&#xa;✅ completed (BOOLEAN)&#xa;📅 created_at (TIMESTAMP)&#xa;📅 updated_at (TIMESTAMP)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=10;spacingLeft=10;" vertex="1" parent="items-table">
+          <mxGeometry y="60" width="250" height="170" as="geometry" />
+        </mxCell>
+
+        <!-- Grocery Memory Table -->
+        <mxCell id="memory-table" value="" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="80" y="400" width="220" height="210" as="geometry" />
+        </mxCell>
+        <mxCell id="memory-title" value="grocery_memory" style="text;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontStyle=1;fontSize=14;" vertex="1" parent="memory-table">
+          <mxGeometry y="30" width="220" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="memory-fields" value="🔑 id (SERIAL PRIMARY KEY)&#xa;👤 user_id (INTEGER FK → users.id)&#xa;📝 name (VARCHAR)&#xa;🏷️ category (VARCHAR)&#xa;⭐ priority (VARCHAR)&#xa;🔢 usage_count (INTEGER)&#xa;📅 last_used (TIMESTAMP)&#xa;📅 created_at (TIMESTAMP)&#xa;🔒 UNIQUE(user_id, name)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=10;spacingLeft=10;" vertex="1" parent="memory-table">
+          <mxGeometry y="60" width="220" height="150" as="geometry" />
+        </mxCell>
+
+        <!-- List Shares Table (Future Feature) -->
+        <mxCell id="shares-table" value="" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="1">
+          <mxGeometry x="400" y="400" width="220" height="190" as="geometry" />
+        </mxCell>
+        <mxCell id="shares-title" value="list_shares" style="text;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontStyle=1;fontSize=14;" vertex="1" parent="shares-table">
+          <mxGeometry y="30" width="220" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="shares-fields" value="🔑 id (SERIAL PRIMARY KEY)&#xa;📋 list_id (INTEGER FK → shopping_lists.id)&#xa;👤 user_id (INTEGER FK → users.id)&#xa;🔐 permission (VARCHAR)&#xa;📅 shared_at (TIMESTAMP)&#xa;🔒 UNIQUE(list_id, user_id)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=10;spacingLeft=10;" vertex="1" parent="shares-table">
+          <mxGeometry y="60" width="220" height="130" as="geometry" />
+        </mxCell>
+
+        <!-- Relationships -->
+        <!-- Users → Shopping Lists (1:N) -->
+        <mxCell id="users-lists-rel" value="" style="endArrow=ERmany;startArrow=ERone;endFill=0;startFill=0;endSize=8;startSize=8;curved=0;exitX=1;exitY=0.3;exitDx=0;exitDy=0;entryX=0;entryY=0.3;entryDx=0;entryDy=0;" edge="1" parent="1" source="users-table" target="lists-table">
+          <mxGeometry width="100" height="100" relative="1" as="geometry">
+            <mxPoint x="300" y="200" as="sourcePoint" />
+            <mxPoint x="400" y="100" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="users-lists-label" value="owns" style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontStyle=2;" vertex="1" parent="1">
+          <mxGeometry x="320" y="140" width="40" height="20" as="geometry" />
+        </mxCell>
+
+        <!-- Shopping Lists → Shopping List Items (1:N) -->
+        <mxCell id="lists-items-rel" value="" style="endArrow=ERmany;startArrow=ERone;endFill=0;startFill=0;endSize=8;startSize=8;curved=0;exitX=1;exitY=0.3;exitDx=0;exitDy=0;entryX=0;entryY=0.3;entryDx=0;entryDy=0;" edge="1" parent="1" source="lists-table" target="items-table">
+          <mxGeometry width="100" height="100" relative="1" as="geometry">
+            <mxPoint x="620" y="200" as="sourcePoint" />
+            <mxPoint x="720" y="100" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="lists-items-label" value="contains" style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontStyle=2;" vertex="1" parent="1">
+          <mxGeometry x="640" y="140" width="50" height="20" as="geometry" />
+        </mxCell>
+
+        <!-- Users → Grocery Memory (1:N) -->
+        <mxCell id="users-memory-rel" value="" style="endArrow=ERmany;startArrow=ERone;endFill=0;startFill=0;endSize=8;startSize=8;curved=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="users-table" target="memory-table">
+          <mxGeometry width="100" height="100" relative="1" as="geometry">
+            <mxPoint x="180" y="320" as="sourcePoint" />
+            <mxPoint x="280" y="220" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="users-memory-label" value="remembers" style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontStyle=2;" vertex="1" parent="1">
+          <mxGeometry x="200" y="330" width="60" height="20" as="geometry" />
+        </mxCell>
+
+        <!-- Shopping Lists → List Shares (1:N) -->
+        <mxCell id="lists-shares-rel" value="" style="endArrow=ERmany;startArrow=ERone;endFill=0;startFill=0;endSize=8;startSize=8;curved=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="lists-table" target="shares-table">
+          <mxGeometry width="100" height="100" relative="1" as="geometry">
+            <mxPoint x="510" y="320" as="sourcePoint" />
+            <mxPoint x="610" y="220" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="lists-shares-label" value="shared with" style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontStyle=2;" vertex="1" parent="1">
+          <mxGeometry x="530" y="330" width="60" height="20" as="geometry" />
+        </mxCell>
+
+        <!-- Users → List Shares (1:N) -->
+        <mxCell id="users-shares-rel" value="" style="endArrow=ERmany;startArrow=ERone;endFill=0;startFill=0;endSize=8;startSize=8;curved=1;exitX=1;exitY=1;exitDx=0;exitDy=0;entryX=0;entryY=0.7;entryDx=0;entryDy=0;" edge="1" parent="1" source="users-table" target="shares-table">
+          <mxGeometry width="100" height="100" relative="1" as="geometry">
+            <mxPoint x="300" y="400" as="sourcePoint" />
+            <mxPoint x="400" y="300" as="targetPoint" />
+            <Array as="points">
+              <mxPoint x="340" y="350" />
+              <mxPoint x="350" y="530" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="users-shares-label" value="has access to" style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontStyle=2;" vertex="1" parent="1">
+          <mxGeometry x="320" y="450" width="70" height="20" as="geometry" />
+        </mxCell>
+
+        <!-- Legend -->
+        <mxCell id="legend-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="720" y="400" width="250" height="190" as="geometry" />
+        </mxCell>
+        <mxCell id="legend-title" value="Legend" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontStyle=1;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="820" y="410" width="50" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="legend-content" value="🔑 Primary Key&#xa;👤 Foreign Key (User)&#xa;📋 Foreign Key (List)&#xa;📧 Unique Constraint&#xa;🔒 Composite Unique&#xa;&#xa;Colors:&#xa;🟣 Users (Purple)&#xa;🔵 Shopping Lists (Blue)&#xa;🟢 List Items (Green)&#xa;🟡 Grocery Memory (Yellow)&#xa;🔴 List Shares (Red)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=10;spacingLeft=10;" vertex="1" parent="1">
+          <mxGeometry x="730" y="440" width="230" height="140" as="geometry" />
+        </mxCell>
+
+        <!-- Notes -->
+        <mxCell id="notes-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="80" y="650" width="890" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="notes-title" value="Database Features" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontStyle=1;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="500" y="660" width="120" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="notes-content" value="• CASCADE DELETE: When a user is deleted, all their shopping lists, items, and grocery memory are automatically removed&#xa;• AUTOMATIC TIMESTAMPS: created_at and updated_at fields are automatically managed with triggers&#xa;• PERFORMANCE INDEXES: Optimized queries with indexes on foreign keys and frequently searched columns&#xa;• SAMPLE DATA: New users automatically receive a shopping list with 5 sample grocery items&#xa;• GROCERY MEMORY: Tracks user's shopping patterns for intelligent autocomplete suggestions&#xa;• FUTURE SHARING: list_shares table prepared for shared shopping lists between multiple users" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=11;spacingLeft=10;" vertex="1" parent="1">
+          <mxGeometry x="90" y="690" width="870" height="70" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

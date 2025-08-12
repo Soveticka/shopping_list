@@ -42,6 +42,34 @@ A modern, full-stack shopping list application with user authentication, databas
 - **Shopping List Items**: Items within lists with categories and metadata
 - **Grocery Memory**: Autocomplete suggestions based on user history
 
+## Database Diagram
+
+![Database Schema](database-diagram.drawio.png)
+
+The database consists of 5 main tables with the following relationships:
+
+### Core Tables
+- **🟣 users**: Authentication and user management
+- **🔵 shopping_lists**: User-owned shopping lists with sharing capability
+- **🟢 shopping_list_items**: Individual grocery items with categories and priorities
+- **🟡 grocery_memory**: Autocomplete suggestions based on user shopping patterns
+- **🔴 list_shares**: Future feature for sharing lists between users
+
+### Key Relationships
+- **Users → Shopping Lists** (1:N): Each user can own multiple shopping lists
+- **Shopping Lists → Items** (1:N): Each list contains multiple grocery items
+- **Users → Grocery Memory** (1:N): Each user has personalized autocomplete data
+- **Lists ↔ Users** (M:N): Future sharing via `list_shares` junction table
+
+### Database Features
+- **Cascade Deletion**: Automatic cleanup when users are deleted
+- **Automatic Timestamps**: `created_at` and `updated_at` managed by triggers  
+- **Performance Indexes**: Optimized for common queries
+- **Unique Constraints**: Prevent duplicate data
+- **Sample Data**: New users get example items automatically
+
+*View the interactive diagram: Open `database-diagram.drawio` in [draw.io](https://app.diagrams.net/)*
+
 ## Getting Started
 
 ### Prerequisites
