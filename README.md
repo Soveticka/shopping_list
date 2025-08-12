@@ -6,6 +6,8 @@ A modern, minimalist shopping list application built with pure HTML, CSS, and Ja
 
 - **Categorized Shopping Lists** - Organize items by Produce, Dairy, Meat & Seafood, and more
 - **Smart Item Management** - Add items with quantity, priority levels, and optional notes
+- **Grocery Memory** - Remembers frequently used items with autocomplete suggestions
+- **Intelligent Autocomplete** - Start typing to see suggestions from your purchase history
 - **Search & Filter** - Quickly find items with search functionality and filter by status
 - **Bulk Operations** - Mark multiple items as purchased/needed or delete selected items
 - **Light/Dark Mode** - Toggle between light and dark themes with preference persistence
@@ -13,6 +15,7 @@ A modern, minimalist shopping list application built with pure HTML, CSS, and Ja
 - **Share Functionality** - Share your shopping list via native sharing or clipboard
 - **Priority System** - Set High, Medium, or Low priority for items
 - **Quantity Controls** - Adjust item quantities with intuitive +/- buttons
+- **Docker Support** - Easy deployment with Docker containers
 
 ## Screenshots
 
@@ -22,9 +25,15 @@ A modern, minimalist shopping list application built with pure HTML, CSS, and Ja
 
 ### Prerequisites
 
-No dependencies required! This is a pure HTML/CSS/JavaScript application.
+**Option 1: Direct Browser Usage**
+- No dependencies required! This is a pure HTML/CSS/JavaScript application.
+
+**Option 2: Docker (Recommended)**
+- Docker and Docker Compose installed on your system
 
 ### Installation
+
+#### Option 1: Direct Browser Usage
 
 1. Clone the repository:
 ```bash
@@ -44,18 +53,65 @@ open shopping-list.html
 xdg-open shopping-list.html
 ```
 
-That's it! The app runs entirely in your browser with no server required.
+#### Option 2: Docker Deployment (Recommended)
+
+1. Clone the repository:
+```bash
+git clone https://github.com/yourusername/shopping-list.git
+cd shopping-list
+```
+
+2. Run with Docker Compose:
+```bash
+# Start the application
+docker-compose up -d
+
+# Or use the convenience script
+chmod +x run-docker.sh
+./run-docker.sh start
+```
+
+3. Open your browser and go to: `http://localhost:3000`
+
+#### Docker Commands
+
+```bash
+# Start the application
+docker-compose up -d
+
+# Stop the application
+docker-compose down
+
+# View logs
+docker-compose logs -f
+
+# Restart the application
+docker-compose restart
+
+# Check status
+docker-compose ps
+
+# Using the convenience script
+./run-docker.sh [start|stop|logs|restart|status]
+```
 
 ## Usage
 
 ### Adding Items
 1. Use the sidebar form to add new items
-2. Enter the item name (required)
+2. Enter the item name (required) - start typing to see autocomplete suggestions from your history
 3. Set quantity using +/- buttons or direct input
 4. Choose a category from the dropdown
 5. Set priority level (Low, Medium, High)
 6. Add optional notes
 7. Click "Add to list"
+
+### Grocery Memory Features
+- **Autocomplete**: Start typing an item name to see suggestions from previously added items
+- **Smart Suggestions**: Items are ranked by frequency of use and recency
+- **Quick Add**: Click on frequent items in the sidebar to quickly add them to your form
+- **Category Memory**: Previously used categories and priorities are remembered for each item
+- **Usage Statistics**: See how many times you've added each item
 
 ### Managing Items
 - **Check off items** by clicking the checkbox when purchased
@@ -113,7 +169,12 @@ This project was developed using **Claude AI** with **Claude Code** - an AI-powe
 ### File Structure
 ```
 shopping-list/
-├── shopping-list.html    # Main application file
+├── shopping-list.html     # Main application file
+├── Dockerfile            # Docker container configuration
+├── docker-compose.yml    # Docker Compose setup
+├── nginx.conf           # Nginx web server configuration
+├── run-docker.sh        # Docker convenience script
+├── .dockerignore        # Docker ignore rules
 ├── README.md            # This file
 ├── LICENSE              # MIT License
 └── .gitignore          # Git ignore rules
@@ -129,12 +190,16 @@ shopping-list/
 
 ## Roadmap
 
+- [x] Grocery memory and autocomplete
+- [x] Docker containerization
 - [ ] Add item templates/favorites
-- [ ] Import/export shopping lists
+- [ ] Import/export shopping lists (JSON/CSV)
 - [ ] Meal planning integration
-- [ ] Shopping history tracking
+- [ ] Shopping history analytics
 - [ ] Barcode scanning (PWA)
 - [ ] Recipe-to-shopping-list conversion
+- [ ] Multi-user support with data sync
+- [ ] API endpoints for external integrations
 
 ## License
 

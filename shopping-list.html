@@ -440,6 +440,120 @@
             box-shadow: 0 0 0 3px rgba(26, 35, 50, 0.1);
         }
 
+        .autocomplete-container {
+            position: relative;
+        }
+
+        .autocomplete-suggestions {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-top: none;
+            border-radius: 0 0 6px 6px;
+            max-height: 200px;
+            overflow-y: auto;
+            z-index: 1000;
+            display: none;
+        }
+
+        .autocomplete-suggestion {
+            padding: 0.75rem;
+            cursor: pointer;
+            border-bottom: 1px solid var(--border-light);
+            transition: background-color 0.2s ease;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .autocomplete-suggestion:last-child {
+            border-bottom: none;
+        }
+
+        .autocomplete-suggestion:hover,
+        .autocomplete-suggestion.highlighted {
+            background: var(--border-light);
+        }
+
+        .suggestion-main {
+            flex: 1;
+        }
+
+        .suggestion-name {
+            font-weight: 500;
+            color: var(--text-primary);
+        }
+
+        .suggestion-meta {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            margin-top: 0.25rem;
+        }
+
+        .suggestion-count {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            background: var(--border-light);
+            padding: 0.25rem 0.5rem;
+            border-radius: 12px;
+        }
+
+        .memory-section {
+            margin-top: 2rem;
+            padding-top: 2rem;
+            border-top: 1px solid var(--border);
+        }
+
+        .memory-title {
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .memory-stats {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            margin-bottom: 1rem;
+        }
+
+        .frequent-items {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .frequent-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.5rem 0.75rem;
+            background: var(--border-light);
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .frequent-item:hover {
+            background: var(--border);
+        }
+
+        .frequent-item-name {
+            font-weight: 500;
+            color: var(--text-primary);
+        }
+
+        .frequent-item-meta {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
         .form-select {
             appearance: none;
             background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%237b8794' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e");
@@ -457,6 +571,17 @@
 
         .quantity-input {
             flex: 1;
+        }
+
+        /* Hide default number input spinners */
+        .quantity-input::-webkit-outer-spin-button,
+        .quantity-input::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+
+        .quantity-input[type=number] {
+            -moz-appearance: textfield;
         }
 
         .add-btn {
@@ -635,8 +760,9 @@
         <div class="sidebar">
             <h2 class="sidebar-title">Add item</h2>
             <form class="add-form" onsubmit="addItem(event)">
-                <div class="form-group">
-                    <input type="text" class="form-input" id="itemName" placeholder="e.g. Milk, apples, rice..." required>
+                <div class="form-group autocomplete-container">
+                    <input type="text" class="form-input" id="itemName" placeholder="e.g. Milk, apples, rice..." required autocomplete="off">
+                    <div class="autocomplete-suggestions" id="autocompleteSuggestions"></div>
                 </div>
                 
                 <div class="form-group">
@@ -682,6 +808,23 @@
                     + Add to list
                 </button>
             </form>
+
+            <div class="memory-section">
+                <div class="memory-title">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M9 11H7a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2h-2"></path>
+                        <polyline points="9,11 12,14 15,11"></polyline>
+                        <line x1="12" y1="2" x2="12" y2="14"></line>
+                    </svg>
+                    Frequent Items
+                </div>
+                <div class="memory-stats" id="memoryStats">
+                    0 items remembered
+                </div>
+                <div class="frequent-items" id="frequentItems">
+                    <!-- Frequent items will be populated here -->
+                </div>
+            </div>
         </div>
     </div>
 
@@ -701,6 +844,8 @@
 
         let itemId = 0;
         let currentFilter = 'all';
+        let groceryMemory = JSON.parse(localStorage.getItem('groceryMemory')) || {};
+        let selectedSuggestionIndex = -1;
 
         function toggleTheme() {
             const body = document.body;
@@ -727,6 +872,119 @@
             quantityInput.value = newValue;
         }
 
+        function saveToMemory(item) {
+            const key = item.name.toLowerCase();
+            if (!groceryMemory[key]) {
+                groceryMemory[key] = {
+                    name: item.name,
+                    category: item.category,
+                    priority: item.priority,
+                    count: 0,
+                    lastUsed: Date.now()
+                };
+            }
+            
+            groceryMemory[key].count++;
+            groceryMemory[key].lastUsed = Date.now();
+            groceryMemory[key].category = item.category;
+            groceryMemory[key].priority = item.priority;
+            
+            localStorage.setItem('groceryMemory', JSON.stringify(groceryMemory));
+            renderMemoryStats();
+            renderFrequentItems();
+        }
+
+        function getAutocompleteItems(query) {
+            if (!query || query.length < 2) return [];
+            
+            const queryLower = query.toLowerCase();
+            return Object.values(groceryMemory)
+                .filter(item => item.name.toLowerCase().includes(queryLower))
+                .sort((a, b) => {
+                    // Sort by usage count (descending) then by last used (descending)
+                    if (b.count !== a.count) return b.count - a.count;
+                    return b.lastUsed - a.lastUsed;
+                })
+                .slice(0, 8);
+        }
+
+        function showAutocompleteSuggestions(suggestions) {
+            const container = document.getElementById('autocompleteSuggestions');
+            
+            if (suggestions.length === 0) {
+                container.style.display = 'none';
+                return;
+            }
+            
+            container.innerHTML = suggestions.map((item, index) => `
+                <div class="autocomplete-suggestion" data-index="${index}" onclick="selectSuggestion(${index})">
+                    <div class="suggestion-main">
+                        <div class="suggestion-name">${item.name}</div>
+                        <div class="suggestion-meta">${categories[item.category]?.name || item.category} • ${item.priority} priority</div>
+                    </div>
+                    <div class="suggestion-count">${item.count}x</div>
+                </div>
+            `).join('');
+            
+            container.style.display = 'block';
+            selectedSuggestionIndex = -1;
+        }
+
+        function selectSuggestion(index) {
+            const suggestions = getAutocompleteItems(document.getElementById('itemName').value);
+            if (index >= 0 && index < suggestions.length) {
+                const item = suggestions[index];
+                
+                document.getElementById('itemName').value = item.name;
+                document.getElementById('itemCategory').value = item.category;
+                document.getElementById('itemPriority').value = item.priority;
+                
+                hideSuggestions();
+            }
+        }
+
+        function hideSuggestions() {
+            document.getElementById('autocompleteSuggestions').style.display = 'none';
+            selectedSuggestionIndex = -1;
+        }
+
+        function renderMemoryStats() {
+            const totalItems = Object.keys(groceryMemory).length;
+            const totalUsage = Object.values(groceryMemory).reduce((sum, item) => sum + item.count, 0);
+            
+            document.getElementById('memoryStats').textContent = 
+                `${totalItems} items remembered • ${totalUsage} total uses`;
+        }
+
+        function renderFrequentItems() {
+            const container = document.getElementById('frequentItems');
+            const frequentItems = Object.values(groceryMemory)
+                .sort((a, b) => b.count - a.count)
+                .slice(0, 8);
+            
+            if (frequentItems.length === 0) {
+                container.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 1rem;">No items in memory yet</div>';
+                return;
+            }
+            
+            container.innerHTML = frequentItems.map(item => `
+                <div class="frequent-item" onclick="addFrequentItem('${item.name}', '${item.category}', '${item.priority}')">
+                    <div>
+                        <div class="frequent-item-name">${item.name}</div>
+                        <div class="frequent-item-meta">${categories[item.category]?.name || item.category}</div>
+                    </div>
+                    <div class="frequent-item-meta">${item.count}x</div>
+                </div>
+            `).join('');
+        }
+
+        function addFrequentItem(name, category, priority) {
+            document.getElementById('itemName').value = name;
+            document.getElementById('itemCategory').value = category;
+            document.getElementById('itemPriority').value = priority;
+            document.getElementById('itemName').focus();
+        }
+
         function addItem(event) {
             event.preventDefault();
             
@@ -744,8 +1002,12 @@
                 quantity,
                 priority,
                 notes,
-                completed: false
+                completed: false,
+                category
             };
+
+            // Save to memory for future autocomplete
+            saveToMemory(newItem);
 
             categories[category].items.push(newItem);
             
@@ -928,6 +1190,60 @@
             });
         });
 
+        // Autocomplete event listeners
+        const itemNameInput = document.getElementById('itemName');
+        
+        itemNameInput.addEventListener('input', (e) => {
+            const query = e.target.value;
+            const suggestions = getAutocompleteItems(query);
+            showAutocompleteSuggestions(suggestions);
+        });
+
+        itemNameInput.addEventListener('keydown', (e) => {
+            const suggestionsContainer = document.getElementById('autocompleteSuggestions');
+            const suggestions = suggestionsContainer.querySelectorAll('.autocomplete-suggestion');
+            
+            if (suggestions.length === 0) return;
+            
+            switch (e.key) {
+                case 'ArrowDown':
+                    e.preventDefault();
+                    selectedSuggestionIndex = Math.min(selectedSuggestionIndex + 1, suggestions.length - 1);
+                    updateSuggestionHighlight(suggestions);
+                    break;
+                    
+                case 'ArrowUp':
+                    e.preventDefault();
+                    selectedSuggestionIndex = Math.max(selectedSuggestionIndex - 1, -1);
+                    updateSuggestionHighlight(suggestions);
+                    break;
+                    
+                case 'Enter':
+                    if (selectedSuggestionIndex >= 0) {
+                        e.preventDefault();
+                        selectSuggestion(selectedSuggestionIndex);
+                    }
+                    break;
+                    
+                case 'Escape':
+                    hideSuggestions();
+                    break;
+            }
+        });
+
+        function updateSuggestionHighlight(suggestions) {
+            suggestions.forEach((suggestion, index) => {
+                suggestion.classList.toggle('highlighted', index === selectedSuggestionIndex);
+            });
+        }
+
+        // Hide suggestions when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.autocomplete-container')) {
+                hideSuggestions();
+            }
+        });
+
         // Add sample data
         categories.produce.items.push(
             { id: ++itemId, name: 'kkk', quantity: 3, priority: 'low', notes: '', completed: false },
@@ -942,6 +1258,8 @@
         loadTheme();
         renderCategories();
         updateStats();
+        renderMemoryStats();
+        renderFrequentItems();
     </script>
 </body>
 </html>
