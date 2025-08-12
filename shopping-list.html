@@ -1,0 +1,947 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shopping List</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary-color: #1a2332;
+            --primary-hover: #0f1419;
+            --background: #f7f8fc;
+            --surface: #ffffff;
+            --text-primary: #1a2332;
+            --text-secondary: #7b8794;
+            --border: #e2e7ed;
+            --border-light: #f2f4f7;
+            --shadow: rgba(26, 35, 50, 0.04);
+            --shadow-medium: rgba(26, 35, 50, 0.08);
+            --danger: #dc3545;
+            --success: #22c55e;
+            --warning: #fbbf24;
+            --low-priority: #22c55e;
+            --medium-priority: #fbbf24;
+            --high-priority: #dc3545;
+        }
+
+        [data-theme="dark"] {
+            --background: #0d1117;
+            --surface: #161b22;
+            --text-primary: #e6edf3;
+            --text-secondary: #7d8590;
+            --border: #30363d;
+            --border-light: #21262d;
+            --shadow: rgba(0, 0, 0, 0.3);
+            --shadow-medium: rgba(0, 0, 0, 0.5);
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--background);
+            color: var(--text-primary);
+            line-height: 1.5;
+            transition: background-color 0.3s ease, color 0.3s ease;
+        }
+
+        .app-container {
+            display: grid;
+            grid-template-columns: 1fr 320px;
+            min-height: 100vh;
+            gap: 0;
+        }
+
+        .main-content {
+            padding: 2rem;
+            overflow-y: auto;
+        }
+
+        .sidebar {
+            background: var(--surface);
+            border-left: 1px solid var(--border);
+            padding: 2rem;
+            position: sticky;
+            top: 0;
+            height: 100vh;
+            overflow-y: auto;
+        }
+
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 2rem;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .header-title {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .header-title h1 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .trash-icon {
+            width: 20px;
+            height: 20px;
+            color: var(--text-secondary);
+        }
+
+        .stats {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .theme-toggle {
+            background: none;
+            border: none;
+            padding: 0.5rem;
+            border-radius: 6px;
+            cursor: pointer;
+            color: var(--text-secondary);
+            transition: all 0.2s ease;
+            font-size: 1.25rem;
+        }
+
+        .theme-toggle:hover {
+            background: var(--border-light);
+            color: var(--text-primary);
+        }
+
+        .search-container {
+            position: relative;
+            margin-bottom: 1.5rem;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 0.75rem 1rem 0.75rem 2.5rem;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--surface);
+            color: var(--text-primary);
+            font-size: 0.875rem;
+            transition: all 0.2s ease;
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(26, 35, 50, 0.1);
+        }
+
+        .search-icon {
+            position: absolute;
+            left: 0.75rem;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 16px;
+            height: 16px;
+            color: var(--text-secondary);
+        }
+
+        .filters {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1.5rem;
+            flex-wrap: wrap;
+        }
+
+        .filter-btn {
+            padding: 0.5rem 1rem;
+            border: 1px solid var(--border);
+            background: var(--surface);
+            color: var(--text-secondary);
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.875rem;
+            transition: all 0.2s ease;
+        }
+
+        .filter-btn:hover,
+        .filter-btn.active {
+            background: var(--primary-color);
+            color: white;
+            border-color: var(--primary-color);
+        }
+
+        .bulk-actions {
+            display: flex;
+            gap: 0.75rem;
+            margin-bottom: 1.5rem;
+            flex-wrap: wrap;
+        }
+
+        .bulk-btn {
+            padding: 0.5rem 0.75rem;
+            border: 1px solid var(--border);
+            background: var(--surface);
+            color: var(--text-secondary);
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.875rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            transition: all 0.2s ease;
+        }
+
+        .bulk-btn:hover {
+            background: var(--border-light);
+            color: var(--text-primary);
+        }
+
+        .categories {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .category {
+            background: var(--surface);
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            overflow: hidden;
+        }
+
+        .category-header {
+            padding: 1rem 1.5rem;
+            background: var(--border-light);
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .items-list {
+            padding: 0;
+        }
+
+        .item {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid var(--border-light);
+            transition: all 0.2s ease;
+        }
+
+        .item:last-child {
+            border-bottom: none;
+        }
+
+        .item:hover {
+            background: var(--border-light);
+        }
+
+        .item.completed {
+            opacity: 0.6;
+        }
+
+        .item.completed .item-name {
+            text-decoration: line-through;
+        }
+
+        .item-checkbox {
+            width: 18px;
+            height: 18px;
+            accent-color: var(--primary-color);
+            cursor: pointer;
+        }
+
+        .item-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+
+        .item-header {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .item-name {
+            font-weight: 500;
+            color: var(--text-primary);
+        }
+
+        .item-badges {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .priority-badge {
+            padding: 0.125rem 0.5rem;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 500;
+            text-transform: capitalize;
+        }
+
+        .priority-low {
+            background: rgba(34, 197, 94, 0.1);
+            color: var(--low-priority);
+        }
+
+        .priority-medium {
+            background: rgba(251, 191, 36, 0.1);
+            color: var(--medium-priority);
+        }
+
+        .priority-high {
+            background: rgba(220, 53, 69, 0.1);
+            color: var(--high-priority);
+        }
+
+        .category-badge {
+            padding: 0.125rem 0.5rem;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 500;
+            background: rgba(26, 35, 50, 0.1);
+            color: var(--text-secondary);
+        }
+
+        .item-quantity {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+
+        .quantity-controls {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+        }
+
+        .qty-btn {
+            width: 24px;
+            height: 24px;
+            border: 1px solid var(--border);
+            background: var(--surface);
+            color: var(--text-secondary);
+            border-radius: 4px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+            transition: all 0.2s ease;
+        }
+
+        .qty-btn:hover {
+            background: var(--border-light);
+            color: var(--text-primary);
+        }
+
+        .quantity-value {
+            min-width: 24px;
+            text-align: center;
+            font-weight: 500;
+            color: var(--text-primary);
+        }
+
+        .item-notes {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            font-style: italic;
+        }
+
+        .item-actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .action-btn {
+            padding: 0.25rem;
+            border: none;
+            background: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            border-radius: 4px;
+            transition: all 0.2s ease;
+        }
+
+        .action-btn:hover {
+            background: var(--border-light);
+            color: var(--text-primary);
+        }
+
+        .action-btn.delete:hover {
+            color: var(--danger);
+            background: rgba(220, 53, 69, 0.1);
+        }
+
+        .sidebar-title {
+            font-size: 1.125rem;
+            font-weight: 600;
+            margin-bottom: 1.5rem;
+            color: var(--text-primary);
+        }
+
+        .add-form {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .form-label {
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+        }
+
+        .form-input {
+            padding: 0.75rem;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: var(--background);
+            color: var(--text-primary);
+            font-size: 0.875rem;
+            transition: all 0.2s ease;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(26, 35, 50, 0.1);
+        }
+
+        .form-select {
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%237b8794' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e");
+            background-position: right 0.75rem center;
+            background-repeat: no-repeat;
+            background-size: 1em 1em;
+            padding-right: 2.5rem;
+        }
+
+        .quantity-input-group {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .quantity-input {
+            flex: 1;
+        }
+
+        .add-btn {
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 0.75rem 1rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 500;
+            font-size: 0.875rem;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+
+        .add-btn:hover {
+            background: var(--primary-hover);
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 3rem 1rem;
+            color: var(--text-secondary);
+        }
+
+        .empty-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            opacity: 0.5;
+        }
+
+        .share-btn {
+            background: var(--border-light);
+            color: var(--text-secondary);
+            border: 1px solid var(--border);
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.875rem;
+            transition: all 0.2s ease;
+        }
+
+        .share-btn:hover {
+            background: var(--primary-color);
+            color: white;
+            border-color: var(--primary-color);
+        }
+
+        @media (max-width: 1024px) {
+            .app-container {
+                grid-template-columns: 1fr;
+            }
+
+            .sidebar {
+                position: relative;
+                height: auto;
+                border-left: none;
+                border-top: 1px solid var(--border);
+                order: 2;
+            }
+
+            .main-content {
+                order: 1;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .app-container {
+                padding: 0;
+            }
+
+            .main-content,
+            .sidebar {
+                padding: 1rem;
+            }
+
+            .header {
+                flex-direction: column;
+                gap: 1rem;
+                align-items: flex-start;
+            }
+
+            .filters {
+                justify-content: flex-start;
+            }
+
+            .bulk-actions {
+                flex-direction: column;
+            }
+
+            .item {
+                padding: 0.75rem;
+            }
+
+            .item-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 0.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <div class="main-content">
+            <div class="header">
+                <div class="header-left">
+                    <div class="header-title">
+                        <svg class="trash-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="3,6 5,6 21,6"></polyline>
+                            <path d="m19,6v14a2,2 0 0,1-2,2H7a2,2 0 0,1-2-2V6m3,0V4a2,2 0 0,1,2-2h4a2,2 0 0,1,2,2v2"></path>
+                        </svg>
+                        <h1>Shopping List</h1>
+                    </div>
+                    <div class="stats" id="stats">3 needed • 0 purchased • 3 total</div>
+                </div>
+                <div class="header-right">
+                    <button class="theme-toggle" onclick="toggleTheme()">☀️</button>
+                    <button class="share-btn" onclick="shareList()">Share</button>
+                </div>
+            </div>
+
+            <div class="search-container">
+                <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <path d="m21 21-4.35-4.35"></path>
+                </svg>
+                <input type="text" class="search-input" placeholder="Search items, notes, categories..." id="searchInput">
+            </div>
+
+            <div class="filters">
+                <button class="filter-btn active" data-filter="all">All</button>
+                <button class="filter-btn" data-filter="needed">Needed</button>
+                <button class="filter-btn" data-filter="purchased">Purchased</button>
+            </div>
+
+            <div class="bulk-actions">
+                <button class="bulk-btn" onclick="bulkSelect()">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="9,11 12,14 22,4"></polyline>
+                        <path d="M21,12v7a2,2 0 0,1-2,2H5a2,2 0 0,1-2-2V5a2,2 0 0,1,2-2h11"></path>
+                    </svg>
+                    Bulk select
+                </button>
+                <button class="bulk-btn" onclick="markPurchased()">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <polyline points="8,12 12,16 16,12"></polyline>
+                    </svg>
+                    Mark purchased
+                </button>
+                <button class="bulk-btn" onclick="markNeeded()">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12,2L2,7V17a2,2 0 0,0,2,2H20a2,2 0 0,0,2-2V7Z"></path>
+                        <polyline points="22,8.5 12,13.5 2,8.5"></polyline>
+                    </svg>
+                    Mark needed
+                </button>
+                <button class="bulk-btn" onclick="deleteSelected()">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="3,6 5,6 21,6"></polyline>
+                        <path d="m19,6v14a2,2 0 0,1-2,2H7a2,2 0 0,1-2-2V6m3,0V4a2,2 0 0,1,2-2h4a2,2 0 0,1,2,2v2"></path>
+                    </svg>
+                    Delete selected
+                </button>
+            </div>
+
+            <div class="categories" id="categoriesContainer">
+                <!-- Categories will be populated here -->
+            </div>
+        </div>
+
+        <div class="sidebar">
+            <h2 class="sidebar-title">Add item</h2>
+            <form class="add-form" onsubmit="addItem(event)">
+                <div class="form-group">
+                    <input type="text" class="form-input" id="itemName" placeholder="e.g. Milk, apples, rice..." required>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Qty</label>
+                    <div class="quantity-input-group">
+                        <button type="button" class="qty-btn" onclick="adjustQuantity(-1)">−</button>
+                        <input type="number" class="form-input quantity-input" id="itemQuantity" value="1" min="1">
+                        <button type="button" class="qty-btn" onclick="adjustQuantity(1)">+</button>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Category</label>
+                    <select class="form-input form-select" id="itemCategory">
+                        <option value="produce">Produce</option>
+                        <option value="dairy">Dairy</option>
+                        <option value="meat">Meat & Seafood</option>
+                        <option value="pantry">Pantry</option>
+                        <option value="frozen">Frozen</option>
+                        <option value="bakery">Bakery</option>
+                        <option value="beverages">Beverages</option>
+                        <option value="snacks">Snacks</option>
+                        <option value="household">Household</option>
+                        <option value="health">Health & Beauty</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Priority</label>
+                    <select class="form-input form-select" id="itemPriority">
+                        <option value="low">Low</option>
+                        <option value="medium">Medium</option>
+                        <option value="high">High</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Note</label>
+                    <input type="text" class="form-input" id="itemNotes" placeholder="optional">
+                </div>
+
+                <button type="submit" class="add-btn">
+                    + Add to list
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        const categories = {
+            'produce': { name: 'PRODUCE', items: [] },
+            'dairy': { name: 'DAIRY', items: [] },
+            'meat': { name: 'MEAT & SEAFOOD', items: [] },
+            'pantry': { name: 'PANTRY', items: [] },
+            'frozen': { name: 'FROZEN', items: [] },
+            'bakery': { name: 'BAKERY', items: [] },
+            'beverages': { name: 'BEVERAGES', items: [] },
+            'snacks': { name: 'SNACKS', items: [] },
+            'household': { name: 'HOUSEHOLD', items: [] },
+            'health': { name: 'HEALTH & BEAUTY', items: [] }
+        };
+
+        let itemId = 0;
+        let currentFilter = 'all';
+
+        function toggleTheme() {
+            const body = document.body;
+            const currentTheme = body.getAttribute('data-theme');
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            body.setAttribute('data-theme', newTheme);
+            localStorage.setItem('theme', newTheme);
+            
+            const themeToggle = document.querySelector('.theme-toggle');
+            themeToggle.textContent = newTheme === 'dark' ? '🌙' : '☀️';
+        }
+
+        function loadTheme() {
+            const savedTheme = localStorage.getItem('theme') || 'light';
+            document.body.setAttribute('data-theme', savedTheme);
+            const themeToggle = document.querySelector('.theme-toggle');
+            themeToggle.textContent = savedTheme === 'dark' ? '🌙' : '☀️';
+        }
+
+        function adjustQuantity(delta) {
+            const quantityInput = document.getElementById('itemQuantity');
+            const currentValue = parseInt(quantityInput.value);
+            const newValue = Math.max(1, currentValue + delta);
+            quantityInput.value = newValue;
+        }
+
+        function addItem(event) {
+            event.preventDefault();
+            
+            const name = document.getElementById('itemName').value.trim();
+            const quantity = parseInt(document.getElementById('itemQuantity').value);
+            const priority = document.getElementById('itemPriority').value;
+            const notes = document.getElementById('itemNotes').value.trim();
+            const category = document.getElementById('itemCategory').value;
+
+            if (!name) return;
+
+            const newItem = {
+                id: ++itemId,
+                name,
+                quantity,
+                priority,
+                notes,
+                completed: false
+            };
+
+            categories[category].items.push(newItem);
+            
+            // Clear form
+            document.getElementById('itemName').value = '';
+            document.getElementById('itemQuantity').value = '1';
+            document.getElementById('itemPriority').value = 'low';
+            document.getElementById('itemNotes').value = '';
+            
+            renderCategories();
+            updateStats();
+        }
+
+        function toggleItem(categoryId, itemId) {
+            const category = categories[categoryId];
+            const item = category.items.find(item => item.id === itemId);
+            if (item) {
+                item.completed = !item.completed;
+                renderCategories();
+                updateStats();
+            }
+        }
+
+        function updateQuantity(categoryId, itemId, delta) {
+            const category = categories[categoryId];
+            const item = category.items.find(item => item.id === itemId);
+            if (item) {
+                item.quantity = Math.max(1, item.quantity + delta);
+                renderCategories();
+            }
+        }
+
+        function deleteItem(categoryId, itemId) {
+            const category = categories[categoryId];
+            category.items = category.items.filter(item => item.id !== itemId);
+            renderCategories();
+            updateStats();
+        }
+
+        function updateStats() {
+            const allItems = Object.values(categories).flatMap(cat => cat.items);
+            const needed = allItems.filter(item => !item.completed).length;
+            const purchased = allItems.filter(item => item.completed).length;
+            const total = allItems.length;
+            
+            document.getElementById('stats').textContent = `${needed} needed • ${purchased} purchased • ${total} total`;
+        }
+
+        function filterItems() {
+            renderCategories();
+        }
+
+        function renderCategories() {
+            const container = document.getElementById('categoriesContainer');
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+            container.innerHTML = '';
+
+            Object.entries(categories).forEach(([categoryId, category]) => {
+                let filteredItems = category.items;
+                
+                // Apply search filter
+                if (searchTerm) {
+                    filteredItems = filteredItems.filter(item => 
+                        item.name.toLowerCase().includes(searchTerm) ||
+                        item.notes.toLowerCase().includes(searchTerm) ||
+                        category.name.toLowerCase().includes(searchTerm)
+                    );
+                }
+                
+                // Apply status filter
+                if (currentFilter === 'needed') {
+                    filteredItems = filteredItems.filter(item => !item.completed);
+                } else if (currentFilter === 'purchased') {
+                    filteredItems = filteredItems.filter(item => item.completed);
+                }
+                
+                if (filteredItems.length === 0) return;
+
+                const categoryDiv = document.createElement('div');
+                categoryDiv.className = 'category';
+                
+                categoryDiv.innerHTML = `
+                    <div class="category-header">
+                        ${category.name}
+                    </div>
+                    <div class="items-list">
+                        ${filteredItems.map(item => `
+                            <div class="item ${item.completed ? 'completed' : ''}">
+                                <input type="checkbox" class="item-checkbox" ${item.completed ? 'checked' : ''} 
+                                       onchange="toggleItem('${categoryId}', ${item.id})">
+                                <div class="item-content">
+                                    <div class="item-header">
+                                        <span class="item-name">${item.name}</span>
+                                        <div class="item-badges">
+                                            <span class="priority-badge priority-${item.priority}">${item.priority}</span>
+                                            <span class="category-badge">${category.name}</span>
+                                        </div>
+                                    </div>
+                                    ${item.notes ? `<div class="item-notes">${item.notes}</div>` : ''}
+                                </div>
+                                <div class="item-quantity">
+                                    <div class="quantity-controls">
+                                        <button class="qty-btn" onclick="updateQuantity('${categoryId}', ${item.id}, -1)">−</button>
+                                        <span class="quantity-value">${item.quantity}</span>
+                                        <button class="qty-btn" onclick="updateQuantity('${categoryId}', ${item.id}, 1)">+</button>
+                                    </div>
+                                    <span>pcs</span>
+                                </div>
+                                <div class="item-actions">
+                                    <button class="action-btn delete" onclick="deleteItem('${categoryId}', ${item.id})">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <polyline points="3,6 5,6 21,6"></polyline>
+                                            <path d="m19,6v14a2,2 0 0,1-2,2H7a2,2 0 0,1-2-2V6m3,0V4a2,2 0 0,1,2-2h4a2,2 0 0,1,2,2v2"></path>
+                                        </svg>
+                                    </button>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+                
+                container.appendChild(categoryDiv);
+            });
+
+            if (container.innerHTML === '') {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-icon">🛒</div>
+                        <h3>No items found</h3>
+                        <p>Try adjusting your search or filters</p>
+                    </div>
+                `;
+            }
+        }
+
+        function shareList() {
+            const allItems = Object.entries(categories)
+                .filter(([_, category]) => category.items.length > 0)
+                .map(([_, category]) => {
+                    const itemsList = category.items
+                        .map(item => `• ${item.name} (${item.quantity}) - ${item.priority} priority${item.notes ? ` - ${item.notes}` : ''}`)
+                        .join('\n');
+                    return `${category.name}:\n${itemsList}`;
+                })
+                .join('\n\n');
+
+            if (allItems) {
+                const shareText = `🛒 My Shopping List\n\n${allItems}`;
+                
+                if (navigator.share) {
+                    navigator.share({
+                        title: 'My Shopping List',
+                        text: shareText
+                    });
+                } else {
+                    navigator.clipboard.writeText(shareText).then(() => {
+                        alert('Shopping list copied to clipboard!');
+                    });
+                }
+            } else {
+                alert('Your shopping list is empty!');
+            }
+        }
+
+        // Bulk actions (placeholder functions)
+        function bulkSelect() { console.log('Bulk select'); }
+        function markPurchased() { console.log('Mark purchased'); }
+        function markNeeded() { console.log('Mark needed'); }
+        function deleteSelected() { console.log('Delete selected'); }
+
+        // Event listeners
+        document.getElementById('searchInput').addEventListener('input', renderCategories);
+
+        document.querySelectorAll('.filter-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                currentFilter = btn.dataset.filter;
+                renderCategories();
+            });
+        });
+
+        // Add sample data
+        categories.produce.items.push(
+            { id: ++itemId, name: 'kkk', quantity: 3, priority: 'low', notes: '', completed: false },
+            { id: ++itemId, name: 'Bananas', quantity: 6, priority: 'low', notes: '', completed: false }
+        );
+
+        categories.dairy.items.push(
+            { id: ++itemId, name: 'Milk', quantity: 2, priority: 'medium', notes: '', completed: false }
+        );
+
+        // Initialize
+        loadTheme();
+        renderCategories();
+        updateStats();
+    </script>
+</body>
+</html>
