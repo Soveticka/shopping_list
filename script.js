@@ -223,9 +223,6 @@ async function loadShoppingList() {
         
         console.log('User lists:', userShoppingLists);
         
-        // Populate list selector
-        populateListSelector();
-        
         if (!userShoppingLists || userShoppingLists.length === 0) {
             console.log('No lists found, creating default list...');
             // Create default list
@@ -238,12 +235,20 @@ async function loadShoppingList() {
             populateListSelector();
             console.log('Created new list with ID:', currentListId);
         } else {
-            // Set current list to first one if none selected
+            // Set current list: use default if available, otherwise first one
             if (!currentListId) {
-                currentListId = userShoppingLists[0].id;
+                if (userDefaultListId && userShoppingLists.find(list => list.id === userDefaultListId)) {
+                    currentListId = userDefaultListId;
+                    console.log('Using default list with ID:', currentListId);
+                } else {
+                    currentListId = userShoppingLists[0].id;
+                    console.log('Using first list with ID:', currentListId);
+                }
             }
-            console.log('Using list with ID:', currentListId);
         }
+        
+        // Populate list selector now that currentListId is set
+        populateListSelector();
         
         // Ensure currentListId is set
         if (!currentListId) {
@@ -298,9 +303,10 @@ function populateListSelector() {
     const selector = document.getElementById('listSelector');
     const renameBtn = document.getElementById('renameListBtn');
     const deleteBtn = document.getElementById('deleteListBtn');
+    const defaultBtn = document.getElementById('defaultListBtn');
     
     // Check if elements exist
-    if (!selector || !renameBtn || !deleteBtn) {
+    if (!selector || !renameBtn || !deleteBtn || !defaultBtn) {
         console.warn('List selector elements not found');
         return;
     }
@@ -325,13 +331,34 @@ function populateListSelector() {
     const hasSelection = currentListId && userShoppingLists && userShoppingLists.length > 0;
     renameBtn.disabled = !hasSelection;
     deleteBtn.disabled = !hasSelection || userShoppingLists.length <= 1;
+    defaultBtn.disabled = !hasSelection;
+    
+    // Update default button appearance
+    const currentList = userShoppingLists && userShoppingLists.find(list => list.id === currentListId);
+    const isCurrentDefault = currentList && currentList.is_default;
+    
+    if (hasSelection && isCurrentDefault) {
+        defaultBtn.textContent = '★'; // Filled star for default
+        defaultBtn.title = 'Remove as default';
+        defaultBtn.style.color = '#ffd700'; // Gold color
+    } else {
+        defaultBtn.textContent = '⭐'; // Outline star
+        defaultBtn.title = 'Set as default';
+        defaultBtn.style.color = ''; // Reset color
+    }
     
     console.log('List selector updated:', { 
         hasSelection, 
         currentListId, 
+        currentList,
+        isCurrentDefault,
         listsCount: userShoppingLists ? userShoppingLists.length : 0,
         renameDisabled: renameBtn.disabled,
-        deleteDisabled: deleteBtn.disabled
+        deleteDisabled: deleteBtn.disabled,
+        defaultDisabled: defaultBtn.disabled,
+        hasCurrentListId: !!currentListId,
+        hasUserShoppingLists: !!userShoppingLists,
+        userShoppingListsLength: userShoppingLists ? userShoppingLists.length : 'null/undefined'
     });
 }
 
@@ -482,7 +509,11 @@ async function confirmDeleteList() {
 function initializeListFormHandling() {
     const listForm = document.getElementById('listForm');
     if (listForm) {
-        listForm.addEventListener('submit', async function(e) {
+        // Remove existing event listeners by cloning the element
+        const newListForm = listForm.cloneNode(true);
+        listForm.parentNode.replaceChild(newListForm, listForm);
+        
+        newListForm.addEventListener('submit', async function(e) {
             e.preventDefault();
             
             const nameInput = document.getElementById('listNameInput');
@@ -563,6 +594,59 @@ function initializeListFormHandling() {
     }
 }
 
+// Default list functionality
+let userDefaultListId = null;
+
+async function loadDefaultList() {
+    try {
+        const response = await apiRequest('/users/default-list');
+        userDefaultListId = response.default_list_id;
+        return userDefaultListId;
+    } catch (error) {
+        console.error('Failed to load default list:', error);
+        return null;
+    }
+}
+
+async function toggleDefaultList() {
+    if (!currentListId) return;
+    
+    try {
+        const currentList = userShoppingLists.find(list => list.id === currentListId);
+        const isCurrentlyDefault = currentList && currentList.is_default;
+        const newDefaultId = isCurrentlyDefault ? null : currentListId;
+        
+        await apiRequest('/users/default-list', {
+            method: 'PUT',
+            body: JSON.stringify({ list_id: newDefaultId })
+        });
+        
+        // Update local data - mark all lists as not default, then set the new default
+        userShoppingLists.forEach(list => {
+            list.is_default = false;
+        });
+        
+        if (newDefaultId) {
+            const listToUpdate = userShoppingLists.find(list => list.id === newDefaultId);
+            if (listToUpdate) {
+                listToUpdate.is_default = true;
+            }
+        }
+        
+        populateListSelector(); // Update UI
+        
+        const message = newDefaultId ? 
+            `"${currentList.name}" is now your default shopping list` : 
+            `"${currentList.name}" is no longer your default shopping list`;
+        
+        console.log(message);
+        
+    } catch (error) {
+        console.error('Failed to toggle default list:', error);
+        alert(`Failed to update default list: ${error.message}`);
+    }
+}
+
 async function initializeApp(skipModalOnError = false) {
     if (!authToken) {
         if (!skipModalOnError) {
@@ -587,6 +671,10 @@ async function initializeApp(skipModalOnError = false) {
         } catch (error) {
             console.warn('Failed to load grocery memory:', error);
         }
+        
+        // Load default list preference
+        console.log('Loading default list preference...');
+        await loadDefaultList();
         
         try {
             await loadShoppingList();

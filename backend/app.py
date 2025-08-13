@@ -364,11 +364,13 @@ def get_shopping_lists():
                     SELECT 
                         sl.id, sl.name, sl.is_shared, sl.created_at, sl.updated_at,
                         COUNT(sli.id) as item_count,
-                        COUNT(CASE WHEN sli.completed = true THEN 1 END) as completed_count
+                        COUNT(CASE WHEN sli.completed = true THEN 1 END) as completed_count,
+                        COALESCE((sl.id = u.default_list_id), false) as is_default
                     FROM shopping_lists sl
                     LEFT JOIN shopping_list_items sli ON sl.id = sli.list_id
+                    LEFT JOIN users u ON u.id = sl.owner_id
                     WHERE sl.owner_id = %s
-                    GROUP BY sl.id
+                    GROUP BY sl.id, u.default_list_id
                     ORDER BY sl.updated_at DESC
                 """, (user_id,))
                 
@@ -574,6 +576,89 @@ def delete_shopping_list(list_id):
     except Exception as e:
         print(f"Delete shopping list error: {e}")
         return jsonify({'error': 'Failed to delete shopping list'}), 500
+
+@app.route('/api/users/default-list', methods=['PUT'])
+@jwt_required()
+def set_default_list():
+    try:
+        user_id = int(get_jwt_identity())
+        data = request.json
+        
+        if not data or 'list_id' not in data:
+            return jsonify({'error': 'list_id is required'}), 400
+        
+        list_id = data['list_id']
+        
+        with get_db_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                # Verify the user owns the list
+                if list_id:
+                    cur.execute(
+                        "SELECT id FROM shopping_lists WHERE id = %s AND owner_id = %s",
+                        (list_id, user_id)
+                    )
+                    if not cur.fetchone():
+                        return jsonify({'error': 'Shopping list not found or not owned by user'}), 404
+                
+                # Update user's default list
+                cur.execute(
+                    "UPDATE users SET default_list_id = %s WHERE id = %s",
+                    (list_id if list_id else None, user_id)
+                )
+                
+                conn.commit()
+                
+                return jsonify({
+                    'message': 'Default shopping list updated successfully',
+                    'default_list_id': list_id
+                }), 200
+                
+    except Exception as e:
+        print(f"Set default list error: {e}")
+        return jsonify({'error': 'Failed to set default shopping list'}), 500
+
+@app.route('/api/users/default-list', methods=['GET'])
+@jwt_required()
+def get_default_list():
+    try:
+        user_id = int(get_jwt_identity())
+        
+        with get_db_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(
+                    "SELECT default_list_id FROM users WHERE id = %s",
+                    (user_id,)
+                )
+                user = cur.fetchone()
+                
+                if not user:
+                    return jsonify({'error': 'User not found'}), 404
+                
+                default_list_id = user['default_list_id']
+                
+                if default_list_id:
+                    # Get the default list details
+                    cur.execute("""
+                        SELECT id, name, is_shared, created_at, updated_at
+                        FROM shopping_lists
+                        WHERE id = %s AND owner_id = %s
+                    """, (default_list_id, user_id))
+                    
+                    default_list = cur.fetchone()
+                    
+                    return jsonify({
+                        'default_list_id': default_list_id,
+                        'default_list': dict(default_list) if default_list else None
+                    })
+                else:
+                    return jsonify({
+                        'default_list_id': None,
+                        'default_list': None
+                    })
+                
+    except Exception as e:
+        print(f"Get default list error: {e}")
+        return jsonify({'error': 'Failed to get default shopping list'}), 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.getenv('PORT', 3001)), debug=os.getenv('NODE_ENV') != 'production')
