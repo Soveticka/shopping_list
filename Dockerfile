@@ -5,10 +5,11 @@ FROM nginx:alpine
 RUN rm -rf /usr/share/nginx/html/*
 
 # Copy our shopping list app files to nginx html directory
-COPY index.html /usr/share/nginx/html/index.html
-COPY shared.html /usr/share/nginx/html/shared.html
-COPY styles.css /usr/share/nginx/html/styles.css
-COPY script.js /usr/share/nginx/html/script.js
+COPY frontend/index.html /usr/share/nginx/html/index.html
+COPY frontend/shared.html /usr/share/nginx/html/shared.html
+COPY frontend/shopping-list.html /usr/share/nginx/html/shopping-list.html
+COPY frontend/styles.css /usr/share/nginx/html/styles.css
+COPY frontend/script.js /usr/share/nginx/html/script.js
 
 # Create a custom nginx configuration
 COPY nginx.conf /etc/nginx/nginx.conf

@@ -12,7 +12,9 @@
       "Bash(start http://localhost:3000)",
       "Bash(git rm:*)",
       "Bash(grep:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(mkdir:*)",
+      "Bash(mv:*)"
     ],
     "deny": [],
     "ask": []

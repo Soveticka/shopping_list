@@ -18,6 +18,8 @@ const API_BASE_URL = 'http://localhost:3001/api';
 let itemId = 0;
 let currentFilter = 'all';
 let currentUser = null;
+let isSelectionMode = false;
+let selectedItems = new Set();
 let authToken = localStorage.getItem('authToken');
 let selectedSuggestionIndex = -1;
 let currentListId = null;
@@ -1563,10 +1565,20 @@ function renderCategories() {
                 ${category.name}
             </div>
             <div class="items-list">
-                ${filteredItems.map(item => `
-                    <div class="item ${item.completed ? 'completed' : ''}">
-                        <input type="checkbox" class="item-checkbox" ${item.completed ? 'checked' : ''} 
-                               onchange="toggleItem('${categoryId}', ${item.id})">
+                ${filteredItems.map(item => {
+                    const itemKey = `${categoryId}-${item.id}`;
+                    const isSelected = selectedItems.has(itemKey);
+                    
+                    return `
+                    <div class="item ${item.completed ? 'completed' : ''} ${isSelectionMode ? 'selection-mode' : ''} ${isSelected ? 'selected' : ''}">
+                        ${isSelectionMode ? `
+                            <div class="selection-area" onclick="toggleItemSelection('${categoryId}', ${item.id})"></div>
+                            <input type="checkbox" class="selection-checkbox" ${isSelected ? 'checked' : ''} 
+                                   onchange="toggleItemSelection('${categoryId}', ${item.id})" style="pointer-events: none;">
+                        ` : `
+                            <input type="checkbox" class="item-checkbox" ${item.completed ? 'checked' : ''} 
+                                   onchange="toggleItem('${categoryId}', ${item.id})">
+                        `}
                         <div class="item-content">
                             <div class="item-header">
                                 <span class="item-name">${item.name}</span>
@@ -1579,14 +1591,14 @@ function renderCategories() {
                         </div>
                         <div class="item-quantity">
                             <div class="quantity-controls">
-                                <button class="qty-btn" onclick="updateQuantity('${categoryId}', ${item.id}, -1)">−</button>
+                                <button class="qty-btn" onclick="updateQuantity('${categoryId}', ${item.id}, -1)" ${isSelectionMode ? 'disabled' : ''}>−</button>
                                 <span class="quantity-value">${item.quantity}</span>
-                                <button class="qty-btn" onclick="updateQuantity('${categoryId}', ${item.id}, 1)">+</button>
+                                <button class="qty-btn" onclick="updateQuantity('${categoryId}', ${item.id}, 1)" ${isSelectionMode ? 'disabled' : ''}>+</button>
                             </div>
                             <span>pcs</span>
                         </div>
                         <div class="item-actions">
-                            <button class="action-btn delete" onclick="deleteItem('${categoryId}', ${item.id})">
+                            <button class="action-btn delete" onclick="deleteItem('${categoryId}', ${item.id})" ${isSelectionMode ? 'disabled' : ''}>
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                     <polyline points="3,6 5,6 21,6"></polyline>
                                     <path d="m19,6v14a2,2 0 0,1-2,2H7a2,2 0 0,1-2-2V6m3,0V4a2,2 0 0,1,2-2h4a2,2 0 0,1,2,2v2"></path>
@@ -1594,7 +1606,7 @@ function renderCategories() {
                             </button>
                         </div>
                     </div>
-                `).join('')}
+                `}).join('')}
             </div>
         `;
         
@@ -2772,9 +2784,6 @@ async function checkListUpdates() {
             renderCategories();
             updateStats();
             lastListUpdate = latestUpdateTime;
-            
-            // Show subtle update indicator
-            showUpdateIndicator('list');
         } else {
             console.log('No updates detected');
         }
@@ -2833,14 +2842,275 @@ function showUpdateIndicator(type) {
     }, 3000);
 }
 
-// Bulk actions (placeholder functions)
-function bulkSelect() { console.log('Bulk select'); }
-function markPurchased() { console.log('Mark purchased'); }
-function markNeeded() { console.log('Mark needed'); }
-function deleteSelected() { console.log('Delete selected'); }
+// Bulk actions implementation
+function bulkSelect() {
+    isSelectionMode = !isSelectionMode;
+    
+    if (!isSelectionMode) {
+        // Exiting selection mode, clear selections
+        selectedItems.clear();
+    }
+    
+    updateBulkActionButtons();
+    renderCategories();
+}
+
+function toggleItemSelection(categoryId, itemId) {
+    const itemKey = `${categoryId}-${itemId}`;
+    
+    if (selectedItems.has(itemKey)) {
+        selectedItems.delete(itemKey);
+    } else {
+        selectedItems.add(itemKey);
+    }
+    
+    updateBulkActionButtons();
+    renderCategories();
+}
+
+async function markPurchased() {
+    if (selectedItems.size === 0) {
+        showToast('No items selected', 'warning');
+        return;
+    }
+    
+    if (!canEditItems()) {
+        showToast('You do not have permission to edit items in this list', 'error');
+        return;
+    }
+    
+    const itemsToUpdate = Array.from(selectedItems);
+    let successCount = 0;
+    let errorCount = 0;
+    
+    for (const itemKey of itemsToUpdate) {
+        try {
+            const [categoryId, itemId] = itemKey.split('-');
+            const category = categories[categoryId];
+            const item = category.items.find(item => item.id === parseInt(itemId));
+            
+            if (item && !item.completed) {
+                await apiRequest(`/lists/${currentListId}/items/${itemId}/toggle`, {
+                    method: 'PUT'
+                });
+                
+                item.completed = true;
+                successCount++;
+            }
+        } catch (error) {
+            console.error(`Failed to mark item as purchased:`, error);
+            errorCount++;
+        }
+    }
+    
+    // Clear selections and exit selection mode
+    selectedItems.clear();
+    isSelectionMode = false;
+    updateBulkActionButtons();
+    renderCategories();
+    updateStats();
+    
+    if (successCount === 0 && errorCount === 0) {
+        showToast('No items needed to be marked as purchased', 'info');
+    } else if (errorCount > 0) {
+        showToast(`Marked ${successCount} items as purchased. ${errorCount} items failed to update.`, 'warning');
+    } else {
+        showToast(`Successfully marked ${successCount} items as purchased.`, 'success');
+    }
+}
+
+async function markNeeded() {
+    if (selectedItems.size === 0) {
+        showToast('No items selected', 'warning');
+        return;
+    }
+    
+    if (!canEditItems()) {
+        showToast('You do not have permission to edit items in this list', 'error');
+        return;
+    }
+    
+    const itemsToUpdate = Array.from(selectedItems);
+    let successCount = 0;
+    let errorCount = 0;
+    
+    for (const itemKey of itemsToUpdate) {
+        try {
+            const [categoryId, itemId] = itemKey.split('-');
+            const category = categories[categoryId];
+            const item = category.items.find(item => item.id === parseInt(itemId));
+            
+            if (item && item.completed) {
+                await apiRequest(`/lists/${currentListId}/items/${itemId}/toggle`, {
+                    method: 'PUT'
+                });
+                
+                item.completed = false;
+                successCount++;
+            }
+        } catch (error) {
+            console.error(`Failed to mark item as needed:`, error);
+            errorCount++;
+        }
+    }
+    
+    // Clear selections and exit selection mode
+    selectedItems.clear();
+    isSelectionMode = false;
+    updateBulkActionButtons();
+    renderCategories();
+    updateStats();
+    
+    if (successCount === 0 && errorCount === 0) {
+        showToast('No items needed to be marked as needed', 'info');
+    } else if (errorCount > 0) {
+        showToast(`Marked ${successCount} items as needed. ${errorCount} items failed to update.`, 'warning');
+    } else {
+        showToast(`Successfully marked ${successCount} items as needed.`, 'success');
+    }
+}
+
+async function deleteSelected() {
+    if (selectedItems.size === 0) {
+        showToast('No items selected', 'warning');
+        return;
+    }
+    
+    if (!canDeleteItems()) {
+        showToast('You do not have permission to delete items in this list', 'error');
+        return;
+    }
+    
+    const confirmMessage = `Are you sure you want to delete ${selectedItems.size} selected item(s)? This action cannot be undone.`;
+    if (!confirm(confirmMessage)) {
+        return;
+    }
+    
+    const itemsToDelete = Array.from(selectedItems);
+    let successCount = 0;
+    let errorCount = 0;
+    
+    for (const itemKey of itemsToDelete) {
+        try {
+            const [categoryId, itemId] = itemKey.split('-');
+            
+            await apiRequest(`/lists/${currentListId}/items/${itemId}`, {
+                method: 'DELETE'
+            });
+            
+            // Remove from local data
+            const category = categories[categoryId];
+            const itemIndex = category.items.findIndex(item => item.id === parseInt(itemId));
+            if (itemIndex !== -1) {
+                category.items.splice(itemIndex, 1);
+            }
+            
+            successCount++;
+        } catch (error) {
+            console.error(`Failed to delete item:`, error);
+            errorCount++;
+        }
+    }
+    
+    // Clear selections and exit selection mode
+    selectedItems.clear();
+    isSelectionMode = false;
+    updateBulkActionButtons();
+    renderCategories();
+    updateStats();
+    
+    if (errorCount > 0) {
+        showToast(`Deleted ${successCount} items. ${errorCount} items failed to delete.`, 'warning');
+    } else {
+        showToast(`Successfully deleted ${successCount} items.`, 'success');
+    }
+}
+
+function updateBulkActionButtons() {
+    const bulkActions = document.querySelector('.bulk-actions');
+    const selectBtn = bulkActions.querySelector('button[onclick="bulkSelect()"]');
+    const markPurchasedBtn = bulkActions.querySelector('button[onclick="markPurchased()"]');
+    const markNeededBtn = bulkActions.querySelector('button[onclick="markNeeded()"]');
+    const deleteBtn = bulkActions.querySelector('button[onclick="deleteSelected()"]');
+    
+    // Update select button
+    if (isSelectionMode) {
+        selectBtn.textContent = `Cancel (${selectedItems.size} selected)`;
+        selectBtn.classList.add('active');
+    } else {
+        selectBtn.innerHTML = `
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M9 11l3 3L22 4"/>
+                <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
+            </svg>
+            Select
+        `;
+        selectBtn.classList.remove('active');
+    }
+    
+    // Enable/disable action buttons based on selection
+    const hasSelection = selectedItems.size > 0;
+    const canEdit = canEditItems();
+    const canDelete = canDeleteItems();
+    
+    markPurchasedBtn.disabled = !isSelectionMode || !hasSelection || !canEdit;
+    markNeededBtn.disabled = !isSelectionMode || !hasSelection || !canEdit;
+    deleteBtn.disabled = !isSelectionMode || !hasSelection || !canDelete;
+    
+    // Update button opacity based on state
+    markPurchasedBtn.style.opacity = markPurchasedBtn.disabled ? '0.5' : '1';
+    markNeededBtn.style.opacity = markNeededBtn.disabled ? '0.5' : '1';
+    deleteBtn.style.opacity = deleteBtn.disabled ? '0.5' : '1';
+}
+
+// Toast notification system
+function showToast(message, type = 'info', duration = 5000) {
+    const toastContainer = document.getElementById('toastContainer');
+    
+    // Create toast element
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    
+    // Icon based on type
+    const icons = {
+        success: '✓',
+        error: '✕',
+        warning: '⚠',
+        info: 'ℹ'
+    };
+    
+    toast.innerHTML = `
+        <div class="toast-icon">${icons[type] || icons.info}</div>
+        <div class="toast-content">${message}</div>
+        <button class="toast-close" onclick="this.parentElement.remove()">✕</button>
+    `;
+    
+    // Add to container
+    toastContainer.appendChild(toast);
+    
+    // Trigger animation
+    setTimeout(() => {
+        toast.classList.add('show');
+    }, 10);
+    
+    // Auto-remove after duration
+    setTimeout(() => {
+        if (toast.parentElement) {
+            toast.classList.remove('show');
+            setTimeout(() => {
+                if (toast.parentElement) {
+                    toast.remove();
+                }
+            }, 300);
+        }
+    }, duration);
+}
 
 // Event listeners
 document.addEventListener('DOMContentLoaded', function() {
+    // Initialize bulk action buttons
+    updateBulkActionButtons();
+    
     // Search input
     document.getElementById('searchInput').addEventListener('input', renderCategories);
 

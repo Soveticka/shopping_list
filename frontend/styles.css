@@ -776,6 +776,181 @@ body {
     opacity: 0.6;
 }
 
+/* Selection mode styles */
+.item.selection-mode {
+    cursor: pointer;
+    border-left: 3px solid transparent;
+    transition: all 0.2s ease;
+    position: relative;
+}
+
+.item.selection-mode:hover {
+    background: var(--primary-light);
+    border-left-color: var(--primary);
+}
+
+.item.selected {
+    background: var(--primary-light) !important;
+    border-left-color: var(--primary) !important;
+}
+
+/* Make large clickable area for selection */
+.item.selection-mode .selection-area {
+    position: absolute;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    right: 140px; /* Leave space for quantity controls and actions */
+    cursor: pointer;
+    z-index: 1;
+}
+
+.item.selection-mode .item-content {
+    position: relative;
+    z-index: 0;
+    pointer-events: none;
+}
+
+.item.selection-mode .item-quantity,
+.item.selection-mode .item-actions {
+    position: relative;
+    z-index: 2;
+    pointer-events: auto;
+}
+
+.selection-checkbox {
+    appearance: none;
+    width: 20px;
+    height: 20px;
+    border: 2px solid var(--primary);
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.selection-checkbox:checked {
+    background: var(--primary);
+    border-color: var(--primary);
+}
+
+.selection-checkbox:checked::after {
+    content: '✓';
+    color: white;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+/* Bulk action button styles */
+.bulk-btn.active {
+    background: var(--primary);
+    color: white;
+}
+
+.bulk-btn:disabled {
+    opacity: 0.5 !important;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+/* Toast notification styles */
+.toast-container {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 10000;
+    pointer-events: none;
+}
+
+.toast {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 8px;
+    box-shadow: 0 4px 12px var(--shadow-medium);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    max-width: 400px;
+    opacity: 0;
+    transform: translateX(100%);
+    transition: all 0.3s ease;
+    pointer-events: auto;
+}
+
+.toast.show {
+    opacity: 1;
+    transform: translateX(0);
+}
+
+.toast.success {
+    border-left: 4px solid #10b981;
+}
+
+.toast.error {
+    border-left: 4px solid #ef4444;
+}
+
+.toast.warning {
+    border-left: 4px solid #f59e0b;
+}
+
+.toast.info {
+    border-left: 4px solid var(--primary);
+}
+
+.toast-icon {
+    flex-shrink: 0;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: bold;
+    color: white;
+}
+
+.toast.success .toast-icon {
+    background: #10b981;
+}
+
+.toast.error .toast-icon {
+    background: #ef4444;
+}
+
+.toast.warning .toast-icon {
+    background: #f59e0b;
+}
+
+.toast.info .toast-icon {
+    background: var(--primary);
+}
+
+.toast-content {
+    flex: 1;
+    font-size: 14px;
+    color: var(--text-primary);
+}
+
+.toast-close {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    transition: background 0.2s ease;
+}
+
+.toast-close:hover {
+    background: var(--border-light);
+}
+
 .item.completed .item-name {
     text-decoration: line-through;
 }
