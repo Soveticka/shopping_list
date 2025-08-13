@@ -506,5 +506,74 @@ def add_list_item(list_id):
         print(f"Add item error: {e}")
         return jsonify({'error': 'Failed to add item to shopping list'}), 500
 
+@app.route('/api/lists/<int:list_id>', methods=['PUT'])
+@jwt_required()
+def update_shopping_list(list_id):
+    try:
+        user_id = int(get_jwt_identity())
+        schema = ShoppingListSchema()
+        data = schema.load(request.json)
+        
+        with get_db_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                # Update list name
+                cur.execute("""
+                    UPDATE shopping_lists 
+                    SET name = %s, updated_at = CURRENT_TIMESTAMP
+                    WHERE id = %s AND owner_id = %s
+                    RETURNING id, name, is_shared, created_at, updated_at
+                """, (data['name'], list_id, user_id))
+                
+                list_data = cur.fetchone()
+                if not list_data:
+                    return jsonify({'error': 'Shopping list not found'}), 404
+                
+                conn.commit()
+                
+                return jsonify({
+                    'message': 'Shopping list updated',
+                    'list': dict(list_data)
+                }), 200
+                
+    except ValidationError as e:
+        return jsonify({'error': 'Validation error', 'details': e.messages}), 400
+    except Exception as e:
+        print(f"Update shopping list error: {e}")
+        return jsonify({'error': 'Failed to update shopping list'}), 500
+
+@app.route('/api/lists/<int:list_id>', methods=['DELETE'])
+@jwt_required()
+def delete_shopping_list(list_id):
+    try:
+        user_id = int(get_jwt_identity())
+        
+        with get_db_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                # Check if user owns the list
+                cur.execute(
+                    "SELECT id, name FROM shopping_lists WHERE id = %s AND owner_id = %s",
+                    (list_id, user_id)
+                )
+                list_data = cur.fetchone()
+                
+                if not list_data:
+                    return jsonify({'error': 'Shopping list not found'}), 404
+                
+                # Delete the list (CASCADE will delete items automatically)
+                cur.execute(
+                    "DELETE FROM shopping_lists WHERE id = %s AND owner_id = %s",
+                    (list_id, user_id)
+                )
+                
+                conn.commit()
+                
+                return jsonify({
+                    'message': f'Shopping list "{list_data["name"]}" deleted successfully'
+                }), 200
+                
+    except Exception as e:
+        print(f"Delete shopping list error: {e}")
+        return jsonify({'error': 'Failed to delete shopping list'}), 500
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.getenv('PORT', 3001)), debug=os.getenv('NODE_ENV') != 'production')

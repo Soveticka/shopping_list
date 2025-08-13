@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shopping List</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app-container">
+        <main class="main-content">
+            <header class="header">
+                <div class="header-left">
+                    <div class="header-title">
+                        <svg class="trash-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M3 6h18l-2 13H5L3 6z"/>
+                            <path d="M8 6V4c0-1 1-2 2-2h4c0 0 1 1 1 2v2"/>
+                        </svg>
+                        <h1>Shopping List</h1>
+                    </div>
+                    <div class="stats" id="stats">0 needed • 0 purchased • 0 total</div>
+                </div>
+                <div class="header-right">
+                    <button class="theme-toggle" onclick="toggleTheme()" title="Toggle theme">☀️</button>
+                    <button class="theme-toggle" onclick="logout()" title="Logout">👤</button>
+                </div>
+            </header>
+
+            <div class="search-container">
+                <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="11" cy="11" r="8"/>
+                    <path d="M21 21l-4.35-4.35"/>
+                </svg>
+                <input type="text" class="search-input" id="searchInput" placeholder="Search items..." autocomplete="off">
+            </div>
+
+            <div class="filters">
+                <button class="filter-btn active" data-filter="all">All Items</button>
+                <button class="filter-btn" data-filter="needed">Needed</button>
+                <button class="filter-btn" data-filter="purchased">Purchased</button>
+            </div>
+
+            <div class="bulk-actions">
+                <button class="bulk-btn" onclick="bulkSelect()">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M9 11l3 3L22 4"/>
+                        <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
+                    </svg>
+                    Select
+                </button>
+                <button class="bulk-btn" onclick="markPurchased()">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M20 6L9 17l-5-5"/>
+                    </svg>
+                    Mark Purchased
+                </button>
+                <button class="bulk-btn" onclick="markNeeded()">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"/>
+                        <line x1="8" y1="12" x2="16" y2="12"/>
+                    </svg>
+                    Mark Needed
+                </button>
+                <button class="bulk-btn" onclick="deleteSelected()">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="3,6 5,6 21,6"/>
+                        <path d="m19,6v14a2,2 0 0,1-2,2H7a2,2 0 0,1-2-2V6m3,0V4a2,2 0 0,1,2-2h4a2,2 0 0,1,2,2v2"/>
+                    </svg>
+                    Delete
+                </button>
+                <button class="share-btn" onclick="shareList()">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8"/>
+                        <polyline points="16,6 12,2 8,6"/>
+                        <line x1="12" y1="2" x2="12" y2="15"/>
+                    </svg>
+                    Share
+                </button>
+            </div>
+
+            <div class="categories" id="categoriesContainer">
+                <!-- Categories will be rendered here -->
+            </div>
+        </main>
+
+        <aside class="sidebar">
+            <!-- Shopping List Selector -->
+            <div class="list-selector-section">
+                <div class="list-selector-header">
+                    <h3 class="list-selector-title">Shopping Lists</h3>
+                    <button class="new-list-btn" onclick="showNewListModal()" title="Create new list">+</button>
+                </div>
+                <div class="current-list">
+                    <select class="list-selector" id="listSelector" onchange="switchShoppingList()">
+                        <option value="">Select a shopping list...</option>
+                    </select>
+                    <div class="list-actions">
+                        <button class="list-action-btn" onclick="showEditListModal()" title="Rename list" id="renameListBtn" disabled>✏️</button>
+                        <button class="list-action-btn delete" onclick="confirmDeleteList()" title="Delete list" id="deleteListBtn" disabled>🗑️</button>
+                    </div>
+                </div>
+            </div>
+            
+            <h2 class="sidebar-title">Add item</h2>
+
+            <form class="add-form" onsubmit="addItem(event)">
+                <div class="form-group">
+                    <label class="form-label" for="itemName">Item Name</label>
+                    <div class="autocomplete-container">
+                        <input type="text" class="form-input" id="itemName" placeholder="What do you need?" required autocomplete="off">
+                        <div class="autocomplete-suggestions" id="autocompleteSuggestions"></div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="itemQuantity">Quantity</label>
+                    <div class="quantity-input-group">
+                        <button type="button" class="qty-btn" onclick="adjustQuantity(-1)">−</button>
+                        <input type="number" class="form-input quantity-input" id="itemQuantity" value="1" min="1" required>
+                        <button type="button" class="qty-btn" onclick="adjustQuantity(1)">+</button>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="itemCategory">Category</label>
+                    <select class="form-input form-select" id="itemCategory" required>
+                        <option value="produce">Produce</option>
+                        <option value="dairy">Dairy</option>
+                        <option value="meat">Meat & Seafood</option>
+                        <option value="pantry">Pantry</option>
+                        <option value="frozen">Frozen</option>
+                        <option value="bakery">Bakery</option>
+                        <option value="beverages">Beverages</option>
+                        <option value="snacks">Snacks</option>
+                        <option value="household">Household</option>
+                        <option value="health">Health & Beauty</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="itemPriority">Priority</label>
+                    <select class="form-input form-select" id="itemPriority" required>
+                        <option value="low">Low</option>
+                        <option value="medium">Medium</option>
+                        <option value="high">High</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="itemNotes">Notes (optional)</label>
+                    <input type="text" class="form-input" id="itemNotes" placeholder="Brand, size, etc...">
+                </div>
+
+                <button type="submit" class="add-btn">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="12" y1="5" x2="12" y2="19"/>
+                        <line x1="5" y1="12" x2="19" y2="12"/>
+                    </svg>
+                    Add to List
+                </button>
+            </form>
+
+            <div class="memory-section">
+                <h3 class="memory-title">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M9 11H5a2 2 0 00-2 2v7a2 2 0 002 2h11a2 2 0 002-2v-7a2 2 0 00-2-2h-4"/>
+                        <polyline points="9,11 12,14 15,11"/>
+                        <line x1="12" y1="14" x2="12" y2="3"/>
+                    </svg>
+                    Shopping Memory
+                </h3>
+                <div class="memory-stats" id="memoryStats">0 items remembered • 0 total uses</div>
+                <div class="frequent-items" id="frequentItems"></div>
+            </div>
+        </aside>
+    </div>
+
+    <!-- Authentication Modal -->
+    <div class="auth-overlay" id="authOverlay" style="display: none;">
+        <div class="auth-modal">
+            <div class="auth-header">
+                <h2 class="auth-title" id="authTitle">Welcome Back</h2>
+                <p class="auth-subtitle" id="authSubtitle">Sign in to access your shopping lists</p>
+            </div>
+            
+            <div class="auth-error" id="authError"></div>
+            <div class="auth-success" id="authSuccess"></div>
+
+            <!-- Login Form -->
+            <form class="auth-form" id="loginForm">
+                <div class="form-group">
+                    <input type="email" class="form-input" id="loginEmail" placeholder="Email address" required>
+                </div>
+                <div class="form-group">
+                    <input type="password" class="form-input" id="loginPassword" placeholder="Password" required>
+                </div>
+                <button type="submit" class="auth-submit" id="loginSubmit">Sign In</button>
+            </form>
+
+            <!-- Register Form -->
+            <form class="auth-form" id="registerForm" style="display: none;">
+                <div class="form-group">
+                    <input type="text" class="form-input" id="registerUsername" placeholder="Username" required>
+                </div>
+                <div class="form-group">
+                    <input type="email" class="form-input" id="registerEmail" placeholder="Email address" required>
+                </div>
+                <div class="form-group">
+                    <input type="password" class="form-input" id="registerPassword" placeholder="Password" required>
+                </div>
+                <button type="submit" class="auth-submit" id="registerSubmit">Create Account</button>
+            </form>
+
+            <div class="auth-switch">
+                <span id="loginSwitch">Don't have an account? <button type="button" onclick="switchToRegister()">Sign up</button></span>
+                <span id="registerSwitch" style="display: none;">Already have an account? <button type="button" onclick="switchToLogin()">Sign in</button></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Shopping List Management Modals -->
+    <div class="auth-overlay" id="listModalOverlay" style="display: none;">
+        <div class="auth-modal">
+            <div class="auth-header">
+                <h2 class="auth-title" id="listModalTitle">Create New Shopping List</h2>
+            </div>
+            <form id="listForm">
+                <div class="form-group">
+                    <input type="text" class="form-input" id="listNameInput" placeholder="Enter list name..." required maxlength="255">
+                </div>
+                <div class="auth-actions">
+                    <button type="button" class="auth-btn secondary" onclick="hideListModal()">Cancel</button>
+                    <button type="submit" class="auth-btn primary" id="listFormSubmit">Create List</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

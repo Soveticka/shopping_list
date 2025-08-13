@@ -406,6 +406,107 @@
             color: var(--text-primary);
         }
 
+        /* Shopping List Selector Styles */
+        .list-selector-section {
+            margin-bottom: 2rem;
+            padding-bottom: 2rem;
+            border-bottom: 1px solid var(--border-light);
+        }
+
+        .list-selector-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 1rem;
+        }
+
+        .list-selector-title {
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin: 0;
+        }
+
+        .new-list-btn {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            border: 1px solid var(--border);
+            background: var(--surface);
+            color: var(--text-primary);
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+        }
+
+        .new-list-btn:hover {
+            background: var(--primary-color);
+            color: white;
+            border-color: var(--primary-color);
+        }
+
+        .current-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .list-selector {
+            padding: 0.75rem;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--background);
+            color: var(--text-primary);
+            font-size: 0.875rem;
+            cursor: pointer;
+            transition: border-color 0.2s ease;
+        }
+
+        .list-selector:focus {
+            outline: none;
+            border-color: var(--primary-color);
+        }
+
+        .list-actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .list-action-btn {
+            padding: 0.5rem;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: var(--surface);
+            color: var(--text-secondary);
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .list-action-btn:hover:not(:disabled) {
+            background: var(--background);
+            color: var(--text-primary);
+        }
+
+        .list-action-btn.delete:hover:not(:disabled) {
+            background: var(--danger);
+            color: white;
+            border-color: var(--danger);
+        }
+
+        .list-action-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
         .add-form {
             display: flex;
             flex-direction: column;
@@ -674,6 +775,47 @@
             display: none;
         }
 
+        .auth-actions {
+            display: flex;
+            gap: 0.75rem;
+            margin-top: 1.5rem;
+        }
+
+        .auth-btn {
+            flex: 1;
+            padding: 0.75rem 1rem;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 0.875rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border: none;
+        }
+
+        .auth-btn.primary {
+            background: var(--primary-color);
+            color: white;
+        }
+
+        .auth-btn.primary:hover {
+            background: var(--primary-hover);
+        }
+
+        .auth-btn.secondary {
+            background: var(--background);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+        }
+
+        .auth-btn.secondary:hover {
+            background: var(--border-light);
+        }
+
+        .auth-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
         .loading-state {
             position: relative;
             overflow: hidden;
@@ -900,6 +1042,23 @@
         </div>
 
         <div class="sidebar">
+            <!-- Shopping List Selector -->
+            <div class="list-selector-section">
+                <div class="list-selector-header">
+                    <h3 class="list-selector-title">Shopping Lists</h3>
+                    <button class="new-list-btn" onclick="showNewListModal()" title="Create new list">+</button>
+                </div>
+                <div class="current-list">
+                    <select class="list-selector" id="listSelector" onchange="switchShoppingList()">
+                        <option value="">Select a shopping list...</option>
+                    </select>
+                    <div class="list-actions">
+                        <button class="list-action-btn" onclick="showEditListModal()" title="Rename list" id="renameListBtn" disabled>✏️</button>
+                        <button class="list-action-btn delete" onclick="confirmDeleteList()" title="Delete list" id="deleteListBtn" disabled>🗑️</button>
+                    </div>
+                </div>
+            </div>
+            
             <h2 class="sidebar-title">Add item</h2>
             <form class="add-form" onsubmit="addItem(event)">
                 <div class="form-group autocomplete-container">
@@ -1006,6 +1165,24 @@
         </div>
     </div>
 
+    <!-- Shopping List Management Modals -->
+    <div class="auth-overlay" id="listModalOverlay" style="display: none;">
+        <div class="auth-modal">
+            <div class="auth-header">
+                <h2 class="auth-title" id="listModalTitle">Create New Shopping List</h2>
+            </div>
+            <form id="listForm">
+                <div class="form-group">
+                    <input type="text" class="form-input" id="listNameInput" placeholder="Enter list name..." required maxlength="255">
+                </div>
+                <div class="auth-actions">
+                    <button type="button" class="auth-btn secondary" onclick="hideListModal()">Cancel</button>
+                    <button type="submit" class="auth-btn primary" id="listFormSubmit">Create List</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <script>
         const categories = {
             'produce': { name: 'PRODUCE', items: [] },
@@ -1030,6 +1207,9 @@
         let authToken = localStorage.getItem('authToken');
         let selectedSuggestionIndex = -1;
         let currentListId = null;
+        let userShoppingLists = [];
+        let isEditingList = false;
+        let editingListId = null;
         
         // Legacy localStorage memory (will be migrated to DB)
         let groceryMemory = JSON.parse(localStorage.getItem('groceryMemory')) || {};
@@ -1225,22 +1405,30 @@
             try {
                 console.log('Loading shopping lists...');
                 const listsResponse = await apiRequest('/lists');
-                const userLists = listsResponse.lists;
+                userShoppingLists = listsResponse.lists;
                 
-                console.log('User lists:', userLists);
+                console.log('User lists:', userShoppingLists);
                 
-                if (!userLists || userLists.length === 0) {
+                // Populate list selector
+                populateListSelector();
+                
+                if (!userShoppingLists || userShoppingLists.length === 0) {
                     console.log('No lists found, creating default list...');
                     // Create default list
                     const newListResponse = await apiRequest('/lists', {
                         method: 'POST',
                         body: JSON.stringify({ name: 'My Shopping List' })
                     });
+                    userShoppingLists.push(newListResponse.list);
                     currentListId = newListResponse.list.id;
+                    populateListSelector();
                     console.log('Created new list with ID:', currentListId);
                 } else {
-                    currentListId = userLists[0].id;
-                    console.log('Using existing list with ID:', currentListId);
+                    // Set current list to first one if none selected
+                    if (!currentListId) {
+                        currentListId = userShoppingLists[0].id;
+                    }
+                    console.log('Using list with ID:', currentListId);
                 }
                 
                 // Ensure currentListId is set
@@ -1291,6 +1479,276 @@
             }
         }
 
+        // Shopping List Management Functions
+        function populateListSelector() {
+            const selector = document.getElementById('listSelector');
+            const renameBtn = document.getElementById('renameListBtn');
+            const deleteBtn = document.getElementById('deleteListBtn');
+            
+            // Check if elements exist
+            if (!selector || !renameBtn || !deleteBtn) {
+                console.warn('List selector elements not found');
+                return;
+            }
+            
+            // Clear existing options
+            selector.innerHTML = '<option value="">Select a shopping list...</option>';
+            
+            // Add user's lists
+            if (userShoppingLists && userShoppingLists.length > 0) {
+                userShoppingLists.forEach(list => {
+                    const option = document.createElement('option');
+                    option.value = list.id;
+                    option.textContent = list.name;
+                    if (list.id === currentListId) {
+                        option.selected = true;
+                    }
+                    selector.appendChild(option);
+                });
+            }
+            
+            // Enable/disable action buttons
+            const hasSelection = currentListId && userShoppingLists && userShoppingLists.length > 0;
+            renameBtn.disabled = !hasSelection;
+            deleteBtn.disabled = !hasSelection || userShoppingLists.length <= 1;
+            
+            console.log('List selector updated:', { 
+                hasSelection, 
+                currentListId, 
+                listsCount: userShoppingLists ? userShoppingLists.length : 0,
+                renameDisabled: renameBtn.disabled,
+                deleteDisabled: deleteBtn.disabled
+            });
+        }
+
+        async function switchShoppingList() {
+            const selector = document.getElementById('listSelector');
+            const newListId = parseInt(selector.value);
+            
+            if (newListId && newListId !== currentListId) {
+                currentListId = newListId;
+                console.log('Switching to list:', currentListId);
+                
+                try {
+                    console.log('Making API request to load list:', currentListId);
+                    // Load the new list's items
+                    const listResponse = await apiRequest(`/lists/${currentListId}`);
+                    console.log('List response received:', listResponse);
+                    
+                    if (!listResponse || !listResponse.list) {
+                        throw new Error('Invalid response from server: ' + JSON.stringify(listResponse));
+                    }
+                    
+                    const list = listResponse.list;
+                    console.log('Processing list:', list.name, 'with', list.items ? list.items.length : 0, 'items');
+                    
+                    // Clear existing items
+                    Object.keys(categories).forEach(cat => {
+                        categories[cat].items = [];
+                    });
+                    
+                    // Populate items from database
+                    if (list.items && list.items.length > 0) {
+                        console.log('Adding items to categories...');
+                        list.items.forEach(item => {
+                            console.log('Processing item:', item.name, 'category:', item.category);
+                            if (categories[item.category]) {
+                                categories[item.category].items.push({
+                                    id: item.id,
+                                    name: item.name,
+                                    quantity: item.quantity,
+                                    priority: item.priority,
+                                    notes: item.notes || '',
+                                    completed: item.completed
+                                });
+                            } else {
+                                console.warn('Unknown category:', item.category, 'for item:', item.name);
+                            }
+                        });
+                    } else {
+                        console.log('No items to add for this list');
+                    }
+                    
+                    // Update UI
+                    console.log('Updating display...');
+                    updateDisplay();
+                    updateStats();
+                    populateListSelector(); // Update button states
+                    
+                    console.log('Successfully switched to list:', list.name);
+                    
+                } catch (error) {
+                    console.error('Failed to switch shopping list:', error);
+                    console.error('Error details:', error.message, error.stack);
+                    alert(`Failed to load shopping list: ${error.message}`);
+                }
+            }
+        }
+
+        function showNewListModal() {
+            const modal = document.getElementById('listModalOverlay');
+            const title = document.getElementById('listModalTitle');
+            const submitBtn = document.getElementById('listFormSubmit');
+            const input = document.getElementById('listNameInput');
+            
+            isEditingList = false;
+            editingListId = null;
+            
+            title.textContent = 'Create New Shopping List';
+            submitBtn.textContent = 'Create List';
+            input.value = '';
+            input.placeholder = 'Enter list name...';
+            
+            modal.style.display = 'flex';
+            input.focus();
+        }
+
+        function showEditListModal() {
+            if (!currentListId) return;
+            
+            const currentList = userShoppingLists.find(list => list.id === currentListId);
+            if (!currentList) return;
+            
+            const modal = document.getElementById('listModalOverlay');
+            const title = document.getElementById('listModalTitle');
+            const submitBtn = document.getElementById('listFormSubmit');
+            const input = document.getElementById('listNameInput');
+            
+            isEditingList = true;
+            editingListId = currentListId;
+            
+            title.textContent = 'Rename Shopping List';
+            submitBtn.textContent = 'Save Changes';
+            input.value = currentList.name;
+            input.placeholder = 'Enter new name...';
+            
+            modal.style.display = 'flex';
+            input.focus();
+            input.select();
+        }
+
+        function hideListModal() {
+            const modal = document.getElementById('listModalOverlay');
+            modal.style.display = 'none';
+            isEditingList = false;
+            editingListId = null;
+        }
+
+        async function confirmDeleteList() {
+            if (!currentListId || userShoppingLists.length <= 1) return;
+            
+            const currentList = userShoppingLists.find(list => list.id === currentListId);
+            if (!currentList) return;
+            
+            if (confirm(`Are you sure you want to delete "${currentList.name}"? This will permanently delete all items in this list.`)) {
+                try {
+                    await apiRequest(`/lists/${currentListId}`, {
+                        method: 'DELETE'
+                    });
+                    
+                    // Remove from local array
+                    userShoppingLists = userShoppingLists.filter(list => list.id !== currentListId);
+                    
+                    // Switch to first remaining list
+                    currentListId = userShoppingLists[0].id;
+                    
+                    // Reload the current list data
+                    await loadShoppingList();
+                    
+                    alert('Shopping list deleted successfully');
+                    
+                } catch (error) {
+                    console.error('Failed to delete shopping list:', error);
+                    alert('Failed to delete shopping list');
+                }
+            }
+        }
+
+        // Initialize list form handling
+        function initializeListFormHandling() {
+            const listForm = document.getElementById('listForm');
+            if (listForm) {
+                listForm.addEventListener('submit', async function(e) {
+                    e.preventDefault();
+                    
+                    const nameInput = document.getElementById('listNameInput');
+                    const listName = nameInput.value.trim();
+                    
+                    if (!listName) {
+                        alert('Please enter a list name');
+                        return;
+                    }
+                    
+                    try {
+                        if (isEditingList && editingListId) {
+                            console.log('Updating list:', editingListId, 'with name:', listName);
+                            // Update existing list
+                            const response = await apiRequest(`/lists/${editingListId}`, {
+                                method: 'PUT',
+                                body: JSON.stringify({ name: listName })
+                            });
+                            
+                            console.log('Update response:', response);
+                            
+                            if (!response || !response.list) {
+                                throw new Error('Invalid response when updating list: ' + JSON.stringify(response));
+                            }
+                            
+                            // Update local array
+                            const listIndex = userShoppingLists.findIndex(list => list.id === editingListId);
+                            if (listIndex !== -1) {
+                                userShoppingLists[listIndex] = response.list;
+                                console.log('Updated local list array');
+                            }
+                            
+                            populateListSelector();
+                            hideListModal();
+                            console.log('Successfully updated list:', response.list.name);
+                            
+                        } else {
+                            console.log('Creating new list with name:', listName);
+                            // Create new list
+                            const response = await apiRequest('/lists', {
+                                method: 'POST',
+                                body: JSON.stringify({ name: listName })
+                            });
+                            
+                            console.log('Create response:', response);
+                            
+                            if (!response || !response.list) {
+                                throw new Error('Invalid response when creating list: ' + JSON.stringify(response));
+                            }
+                            
+                            // Add to local array
+                            userShoppingLists.push(response.list);
+                            console.log('Added to local list array, total lists:', userShoppingLists.length);
+                            
+                            // Switch to new list
+                            currentListId = response.list.id;
+                            console.log('Switched to new list ID:', currentListId);
+                            
+                            // Clear current items and update UI
+                            Object.keys(categories).forEach(cat => {
+                                categories[cat].items = [];
+                            });
+                            
+                            updateDisplay();
+                            updateStats();
+                            populateListSelector();
+                            hideListModal();
+                            
+                            console.log('Successfully created list:', response.list.name);
+                        }
+                        
+                    } catch (error) {
+                        console.error('Failed to save shopping list:', error);
+                        console.error('Error details:', error.message, error.stack);
+                        alert(`Failed to save shopping list: ${error.message}`);
+                    }
+                });
+            }
+        }
+
         async function initializeApp(skipModalOnError = false) {
             if (!authToken) {
                 if (!skipModalOnError) {
@@ -1336,6 +1794,9 @@
                 }
                 
                 console.log('After loading, currentListId:', currentListId);
+                
+                // Initialize list form handling
+                initializeListFormHandling();
                 
                 console.log('App initialized successfully');
                 
@@ -1582,6 +2043,11 @@
         function deleteItem(categoryId, itemId) {
             const category = categories[categoryId];
             category.items = category.items.filter(item => item.id !== itemId);
+            renderCategories();
+            updateStats();
+        }
+
+        function updateDisplay() {
             renderCategories();
             updateStats();
         }
