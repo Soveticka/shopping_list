@@ -5,6 +5,7 @@ Developed with Claude AI using Claude Code
 """
 
 import os
+import secrets
 from datetime import datetime, timedelta
 from flask import Flask, request, jsonify
 from flask_cors import CORS
@@ -659,6 +660,132 @@ def get_default_list():
     except Exception as e:
         print(f"Get default list error: {e}")
         return jsonify({'error': 'Failed to get default shopping list'}), 500
+
+# Shopping list sharing routes
+@app.route('/api/lists/<int:list_id>/share', methods=['POST'])
+@jwt_required()
+def generate_share_link(list_id):
+    try:
+        user_id = int(get_jwt_identity())
+        
+        with get_db_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                # Verify user owns the list
+                cur.execute(
+                    "SELECT id, name FROM shopping_lists WHERE id = %s AND owner_id = %s",
+                    (list_id, user_id)
+                )
+                list_data = cur.fetchone()
+                
+                if not list_data:
+                    return jsonify({'error': 'Shopping list not found or not owned by user'}), 404
+                
+                # Generate a secure random token
+                share_token = secrets.token_urlsafe(32)
+                
+                # Update the list with the share token
+                cur.execute(
+                    "UPDATE shopping_lists SET share_token = %s WHERE id = %s",
+                    (share_token, list_id)
+                )
+                
+                conn.commit()
+                
+                # Create frontend URL (default to localhost:3000 for development)
+                frontend_url = os.getenv('FRONTEND_URL', 'http://localhost:3000/')
+                if not frontend_url.endswith('/'):
+                    frontend_url += '/'
+                
+                return jsonify({
+                    'message': 'Share link generated successfully',
+                    'share_token': share_token,
+                    'share_url': f"{frontend_url}s/{share_token}",
+                    'list_name': list_data['name']
+                }), 200
+                
+    except Exception as e:
+        print(f"Generate share link error: {e}")
+        return jsonify({'error': 'Failed to generate share link'}), 500
+
+@app.route('/api/shared/<string:share_token>', methods=['GET'])
+def get_shared_shopping_list(share_token):
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                # Get list info by share token
+                cur.execute("""
+                    SELECT sl.id, sl.name, sl.created_at, sl.updated_at,
+                           u.username as owner_username
+                    FROM shopping_lists sl
+                    JOIN users u ON sl.owner_id = u.id
+                    WHERE sl.share_token = %s
+                """, (share_token,))
+                
+                list_data = cur.fetchone()
+                if not list_data:
+                    return jsonify({'error': 'Shared shopping list not found'}), 404
+                
+                # Get list items
+                cur.execute("""
+                    SELECT id, name, quantity, category, priority, notes, completed, created_at, updated_at
+                    FROM shopping_list_items
+                    WHERE list_id = %s
+                    ORDER BY completed ASC, created_at DESC
+                """, (list_data['id'],))
+                
+                items = cur.fetchall()
+                
+                return jsonify({
+                    'list': {
+                        **dict(list_data),
+                        'items': [dict(item) for item in items]
+                    }
+                })
+                
+    except Exception as e:
+        print(f"Get shared shopping list error: {e}")
+        return jsonify({'error': 'Failed to get shared shopping list'}), 500
+
+@app.route('/api/shared/<string:share_token>/items/<int:item_id>/toggle', methods=['PUT'])
+def toggle_shared_item(share_token, item_id):
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                # Verify the share token is valid and get list_id
+                cur.execute(
+                    "SELECT id FROM shopping_lists WHERE share_token = %s",
+                    (share_token,)
+                )
+                list_data = cur.fetchone()
+                
+                if not list_data:
+                    return jsonify({'error': 'Invalid share token'}), 404
+                
+                # Toggle the item's completed status
+                cur.execute("""
+                    UPDATE shopping_list_items 
+                    SET completed = NOT completed, updated_at = CURRENT_TIMESTAMP
+                    WHERE id = %s AND list_id = %s
+                    RETURNING id, completed
+                """, (item_id, list_data['id']))
+                
+                item = cur.fetchone()
+                if not item:
+                    return jsonify({'error': 'Item not found'}), 404
+                
+                conn.commit()
+                
+                return jsonify({
+                    'message': 'Item status updated',
+                    'item': {
+                        'id': item['id'],
+                        'completed': item['completed']
+                    }
+                }), 200
+                
+    except Exception as e:
+        print(f"Toggle shared item error: {e}")
+        return jsonify({'error': 'Failed to update item'}), 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.getenv('PORT', 3001)), debug=os.getenv('NODE_ENV') != 'production')

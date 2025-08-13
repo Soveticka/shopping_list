@@ -1050,7 +1050,81 @@ function renderCategories() {
     }
 }
 
-function shareList() {
+async function shareList() {
+    if (!currentListId) {
+        alert('No shopping list selected to share');
+        return;
+    }
+
+    try {
+        const response = await apiRequest(`/lists/${currentListId}/share`, {
+            method: 'POST'
+        });
+
+        const shareUrl = response.share_url;
+        const listName = response.list_name;
+
+        // Create a modal to show the share URL
+        showShareModal(shareUrl, listName);
+
+    } catch (error) {
+        console.error('Failed to generate share link:', error);
+        alert(`Failed to generate share link: ${error.message}`);
+    }
+}
+
+function showShareModal(shareUrl, listName) {
+    // Create modal HTML
+    const modalHtml = `
+        <div class="auth-overlay" id="shareModalOverlay" style="display: flex;">
+            <div class="auth-modal">
+                <div class="auth-header">
+                    <h2 class="auth-title">Share "${listName}"</h2>
+                    <p class="auth-subtitle">Anyone with this link can view and check off items</p>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Share URL:</label>
+                    <div style="display: flex; gap: 10px;">
+                        <input type="text" class="form-input" id="shareUrlInput" value="${shareUrl}" readonly style="flex: 1;">
+                        <button type="button" class="auth-btn primary" onclick="copyShareUrl()">Copy</button>
+                    </div>
+                </div>
+                <div class="auth-actions">
+                    <button type="button" class="auth-btn secondary" onclick="hideShareModal()">Close</button>
+                </div>
+            </div>
+        </div>
+    `;
+
+    // Add modal to body
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+}
+
+function copyShareUrl() {
+    const input = document.getElementById('shareUrlInput');
+    input.select();
+    document.execCommand('copy');
+    
+    // Give feedback
+    const button = event.target;
+    const originalText = button.textContent;
+    button.textContent = 'Copied!';
+    button.style.background = '#22c55e';
+    
+    setTimeout(() => {
+        button.textContent = originalText;
+        button.style.background = '';
+    }, 2000);
+}
+
+function hideShareModal() {
+    const modal = document.getElementById('shareModalOverlay');
+    if (modal) {
+        modal.remove();
+    }
+}
+
+function legacyShareList() {
     const allItems = Object.entries(categories)
         .filter(([_, category]) => category.items.length > 0)
         .map(([_, category]) => {

@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shared Shopping List</title>
+    <link rel="stylesheet" href="/styles.css">
+    <style>
+        /* Additional styles for guest view */
+        .guest-banner {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px;
+            text-align: center;
+            margin-bottom: 20px;
+            border-radius: 8px;
+        }
+        
+        .guest-banner h2 {
+            margin: 0 0 5px 0;
+            font-size: 1.2em;
+        }
+        
+        .guest-banner p {
+            margin: 0;
+            opacity: 0.9;
+            font-size: 0.9em;
+        }
+        
+        .sidebar {
+            display: none; /* Hide the sidebar in guest view */
+        }
+        
+        .main-content {
+            width: 100%;
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-muted);
+        }
+        
+        .error {
+            text-align: center;
+            padding: 40px;
+            color: var(--accent-red);
+        }
+        
+        .item {
+            cursor: pointer;
+        }
+        
+        .item:hover {
+            background-color: var(--surface-hover);
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <main class="main-content">
+            <div class="guest-banner">
+                <h2 id="listTitle">Shared Shopping List</h2>
+                <p id="listOwner">Loading...</p>
+            </div>
+
+            <header class="header">
+                <div class="header-left">
+                    <div class="header-title">
+                        <svg class="trash-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M3 6h18l-2 13H5L3 6z"/>
+                            <path d="M8 6V4c0-1 1-2 2-2h4c0 0 1 1 1 2v2"/>
+                        </svg>
+                        <h1>Shopping List</h1>
+                    </div>
+                    <div class="stats" id="stats">Loading...</div>
+                </div>
+                <div class="header-right">
+                    <button class="theme-toggle" onclick="toggleTheme()" title="Toggle theme">☀️</button>
+                </div>
+            </header>
+
+            <div class="filters">
+                <button class="filter-btn active" data-filter="all">All Items</button>
+                <button class="filter-btn" data-filter="needed">Needed</button>
+                <button class="filter-btn" data-filter="purchased">Purchased</button>
+            </div>
+
+            <div id="loadingMessage" class="loading">
+                Loading shopping list...
+            </div>
+
+            <div id="errorMessage" class="error" style="display: none;">
+                Failed to load shopping list. The link may be invalid or expired.
+            </div>
+
+            <div class="categories" id="categoriesContainer" style="display: none;">
+                <!-- Categories will be rendered here -->
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // Configuration
+        const API_BASE_URL = 'http://localhost:3001/api';
+        
+        // State
+        let currentFilter = 'all';
+        let sharedListData = null;
+        let shareToken = null;
+        
+        // Get share token from URL
+        const pathParts = window.location.pathname.split('/');
+        if (pathParts[1] === 's' && pathParts[2]) {
+            shareToken = pathParts[2];
+        }
+
+        // Categories structure (same as main app)
+        const categories = {
+            'produce': { name: 'PRODUCE', items: [] },
+            'dairy': { name: 'DAIRY', items: [] },
+            'meat': { name: 'MEAT & SEAFOOD', items: [] },
+            'pantry': { name: 'PANTRY', items: [] },
+            'frozen': { name: 'FROZEN', items: [] },
+            'bakery': { name: 'BAKERY', items: [] },
+            'beverages': { name: 'BEVERAGES', items: [] },
+            'snacks': { name: 'SNACKS', items: [] },
+            'household': { name: 'HOUSEHOLD', items: [] },
+            'health': { name: 'HEALTH & BEAUTY', items: [] }
+        };
+
+        // API request helper
+        async function apiRequest(endpoint, options = {}) {
+            const url = `${API_BASE_URL}${endpoint}`;
+            const config = {
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                ...options
+            };
+
+            try {
+                const response = await fetch(url, config);
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error || `HTTP ${response.status}`);
+                }
+
+                return data;
+            } catch (error) {
+                console.error('API request failed:', error);
+                throw error;
+            }
+        }
+
+        // Load shared shopping list
+        async function loadSharedList() {
+            if (!shareToken) {
+                showError('Invalid share link');
+                return;
+            }
+
+            try {
+                const response = await apiRequest(`/shared/${shareToken}`);
+                sharedListData = response.list;
+                
+                // Update page title and info
+                document.getElementById('listTitle').textContent = sharedListData.name;
+                document.getElementById('listOwner').textContent = `Shared by ${sharedListData.owner_username}`;
+                document.title = `${sharedListData.name} - Shared Shopping List`;
+                
+                // Clear categories and populate with items
+                Object.keys(categories).forEach(cat => {
+                    categories[cat].items = [];
+                });
+                
+                sharedListData.items.forEach(item => {
+                    if (categories[item.category]) {
+                        categories[item.category].items.push(item);
+                    }
+                });
+                
+                // Show the list and hide loading
+                document.getElementById('loadingMessage').style.display = 'none';
+                document.getElementById('categoriesContainer').style.display = 'block';
+                
+                // Render categories and update stats
+                renderCategories();
+                updateStats();
+                
+            } catch (error) {
+                console.error('Failed to load shared list:', error);
+                showError('Failed to load shopping list. The link may be invalid or expired.');
+            }
+        }
+
+        // Show error message
+        function showError(message) {
+            document.getElementById('loadingMessage').style.display = 'none';
+            document.getElementById('errorMessage').style.display = 'block';
+            document.getElementById('errorMessage').textContent = message;
+        }
+
+        // Toggle item completion
+        async function toggleItem(itemId) {
+            try {
+                const response = await apiRequest(`/shared/${shareToken}/items/${itemId}/toggle`, {
+                    method: 'PUT'
+                });
+                
+                // Update local data
+                Object.values(categories).forEach(category => {
+                    category.items.forEach(item => {
+                        if (item.id === itemId) {
+                            item.completed = response.item.completed;
+                        }
+                    });
+                });
+                
+                // Re-render categories and update stats
+                renderCategories();
+                updateStats();
+                
+            } catch (error) {
+                console.error('Failed to toggle item:', error);
+                alert('Failed to update item. Please try again.');
+            }
+        }
+
+        // Theme management (same as main app)
+        function toggleTheme() {
+            const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
+            const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+            document.documentElement.setAttribute('data-theme', newTheme);
+            localStorage.setItem('shopping-list-theme', newTheme);
+            
+            const themeToggle = document.querySelector('.theme-toggle');
+            themeToggle.textContent = newTheme === 'light' ? '☀️' : '🌙';
+        }
+
+        function loadTheme() {
+            const savedTheme = localStorage.getItem('shopping-list-theme') || 'light';
+            document.documentElement.setAttribute('data-theme', savedTheme);
+            
+            const themeToggle = document.querySelector('.theme-toggle');
+            themeToggle.textContent = savedTheme === 'light' ? '☀️' : '🌙';
+        }
+
+        // Render categories (same logic as main app)
+        function renderCategories() {
+            const container = document.getElementById('categoriesContainer');
+            const filteredCategories = Object.entries(categories).filter(([_, category]) => {
+                if (currentFilter === 'all') return category.items.length > 0;
+                if (currentFilter === 'needed') return category.items.some(item => !item.completed);
+                if (currentFilter === 'purchased') return category.items.some(item => item.completed);
+                return false;
+            });
+
+            container.innerHTML = filteredCategories.map(([categoryKey, category]) => {
+                const filteredItems = category.items.filter(item => {
+                    if (currentFilter === 'needed') return !item.completed;
+                    if (currentFilter === 'purchased') return item.completed;
+                    return true;
+                });
+
+                return `
+                    <div class="category" data-category="${categoryKey}">
+                        <div class="category-header">
+                            <h3 class="category-title">${category.name}</h3>
+                            <span class="item-count">${filteredItems.length} items</span>
+                        </div>
+                        <div class="items-list">
+                            ${filteredItems.map(item => `
+                                <div class="item ${item.completed ? 'completed' : ''}" onclick="toggleItem(${item.id})">
+                                    <input type="checkbox" class="item-checkbox" ${item.completed ? 'checked' : ''} readonly>
+                                    <div class="item-content">
+                                        <div class="item-header">
+                                            <span class="item-name">${item.name}</span>
+                                            <div class="item-badges">
+                                                <span class="priority-badge priority-${item.priority}">${item.priority}</span>
+                                                <span class="category-badge">${categories[item.category].name}</span>
+                                            </div>
+                                        </div>
+                                        ${item.notes ? `<div class="item-notes">${item.notes}</div>` : ''}
+                                    </div>
+                                    <div class="item-quantity">${item.quantity}</div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Update stats
+        function updateStats() {
+            const allItems = Object.values(categories).flatMap(category => category.items);
+            const needed = allItems.filter(item => !item.completed).length;
+            const purchased = allItems.filter(item => item.completed).length;
+            const total = allItems.length;
+
+            document.getElementById('stats').textContent = `${needed} needed • ${purchased} purchased • ${total} total`;
+        }
+
+        // Filter functionality
+        function setFilter(filter) {
+            currentFilter = filter;
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                btn.classList.remove('active');
+                if (btn.dataset.filter === filter) {
+                    btn.classList.add('active');
+                }
+            });
+            if (sharedListData) {
+                renderCategories();
+            }
+        }
+
+        // Initialize filters
+        document.addEventListener('DOMContentLoaded', function() {
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                btn.addEventListener('click', () => setFilter(btn.dataset.filter));
+            });
+            
+            // Load theme and shared list
+            loadTheme();
+            loadSharedList();
+        });
+    </script>
+</body>
+</html>

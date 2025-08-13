@@ -6,6 +6,7 @@ RUN rm -rf /usr/share/nginx/html/*
 
 # Copy our shopping list app files to nginx html directory
 COPY index.html /usr/share/nginx/html/index.html
+COPY shared.html /usr/share/nginx/html/shared.html
 COPY styles.css /usr/share/nginx/html/styles.css
 COPY script.js /usr/share/nginx/html/script.js
 
