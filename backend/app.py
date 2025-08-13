@@ -66,6 +66,7 @@ class ShoppingListItemSchema(Schema):
     ])
     priority = fields.Str(missing='low', validate=lambda x: x in ['low', 'medium', 'high'])
     notes = fields.Str(missing='')
+    completed = fields.Bool(missing=False)
 
 class ShoppingListSchema(Schema):
     name = fields.Str(missing='My Shopping List', validate=lambda x: 1 <= len(x) <= 255)
@@ -539,6 +540,54 @@ def add_list_item(list_id):
     except Exception as e:
         print(f"Add item error: {e}")
         return jsonify({'error': 'Failed to add item to shopping list'}), 500
+
+@app.route('/api/lists/<int:list_id>/items/<int:item_id>', methods=['PUT'])
+@jwt_required()
+def update_list_item(list_id, item_id):
+    try:
+        user_id = int(get_jwt_identity())
+        schema = ShoppingListItemSchema()
+        data = schema.load(request.json)
+        
+        with get_db_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                # Verify list access (owner or shared with write permission)
+                cur.execute("""
+                    SELECT sl.id 
+                    FROM shopping_lists sl
+                    LEFT JOIN list_shares ls ON ls.list_id = sl.id AND ls.user_id = %s AND ls.status = 'accepted'
+                    WHERE sl.id = %s AND (
+                        sl.owner_id = %s OR 
+                        (ls.id IS NOT NULL AND ls.permission IN ('write', 'admin'))
+                    )
+                """, (user_id, list_id, user_id))
+                if not cur.fetchone():
+                    return jsonify({'error': 'Shopping list not found or access denied'}), 404
+                
+                # Update the item
+                cur.execute("""
+                    UPDATE shopping_list_items 
+                    SET name = %s, quantity = %s, category = %s, priority = %s, notes = %s, completed = %s
+                    WHERE id = %s AND list_id = %s
+                    RETURNING id, name, quantity, category, priority, notes, completed, created_at, updated_at
+                """, (data['name'], data['quantity'], data['category'], data['priority'], data['notes'], data['completed'], item_id, list_id))
+                
+                item = cur.fetchone()
+                if not item:
+                    return jsonify({'error': 'Item not found'}), 404
+                
+                conn.commit()
+                
+                return jsonify({
+                    'message': 'Item updated successfully',
+                    'item': dict(item)
+                }), 200
+                
+    except ValidationError as e:
+        return jsonify({'error': 'Validation error', 'details': e.messages}), 400
+    except Exception as e:
+        print(f"Update item error: {e}")
+        return jsonify({'error': 'Failed to update item'}), 500
 
 @app.route('/api/lists/<int:list_id>/items/<int:item_id>/toggle', methods=['PUT'])
 @jwt_required()

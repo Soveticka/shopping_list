@@ -332,27 +332,42 @@ async function loadShoppingList() {
 
 // Shopping List Management Functions
 function populateListSelector() {
+    // Header elements (new location)
+    const headerMyListsContainer = document.getElementById('headerMyListsContainer');
+    const headerSharedListsContainer = document.getElementById('headerSharedListsContainer');
+    const headerMyListsCount = document.getElementById('headerMyListsCount');
+    const headerSharedListsCount = document.getElementById('headerSharedListsCount');
+    const headerCurrentListActions = document.getElementById('headerCurrentListActions');
+    
+    // Legacy sidebar elements (for compatibility)
     const myListsContainer = document.getElementById('myListsContainer');
     const sharedListsContainer = document.getElementById('sharedListsContainer');
     const myListsCount = document.getElementById('myListsCount');
     const sharedListsCount = document.getElementById('sharedListsCount');
     const currentListActions = document.getElementById('currentListActions');
     
-    // Check if elements exist
-    if (!myListsContainer || !sharedListsContainer || !myListsCount || !sharedListsCount) {
-        console.warn('List container elements not found');
+    // Check if header elements exist (prioritize header)
+    if (!headerMyListsContainer || !headerSharedListsContainer) {
+        console.warn('Header list container elements not found');
         return;
     }
     
     // Clear existing content
-    myListsContainer.innerHTML = '';
-    sharedListsContainer.innerHTML = '';
+    headerMyListsContainer.innerHTML = '';
+    headerSharedListsContainer.innerHTML = '';
+    
+    // Clear legacy sidebar elements if they exist
+    if (myListsContainer) myListsContainer.innerHTML = '';
+    if (sharedListsContainer) sharedListsContainer.innerHTML = '';
     
     if (!userShoppingLists || userShoppingLists.length === 0) {
-        myListsContainer.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 1rem; font-size: 0.875rem;">No lists yet</div>';
-        myListsCount.textContent = '0';
-        sharedListsCount.textContent = '0';
-        currentListActions.style.display = 'none';
+        headerMyListsContainer.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 0.5rem; font-size: 0.75rem;">No lists yet</div>';
+        headerMyListsCount.textContent = '0';
+        headerSharedListsCount.textContent = '0';
+        headerCurrentListActions.style.display = 'none';
+        
+        // Update current list indicator
+        updateCurrentListIndicator();
         return;
     }
     
@@ -371,32 +386,37 @@ function populateListSelector() {
     sharedLists.sort((a, b) => a.name.localeCompare(b.name));
     
     // Update counts
-    myListsCount.textContent = ownedLists.length.toString();
-    sharedListsCount.textContent = sharedLists.length.toString();
+    headerMyListsCount.textContent = ownedLists.length.toString();
+    headerSharedListsCount.textContent = sharedLists.length.toString();
+    
+    // Update legacy sidebar counts if they exist
+    if (myListsCount) myListsCount.textContent = ownedLists.length.toString();
+    if (sharedListsCount) sharedListsCount.textContent = sharedLists.length.toString();
     
     // Render owned lists
     ownedLists.forEach(list => {
-        const listElement = createListElement(list, true);
-        myListsContainer.appendChild(listElement);
+        const listElement = createHeaderListElement(list, true);
+        headerMyListsContainer.appendChild(listElement);
     });
     
     // Render shared lists  
     sharedLists.forEach(list => {
-        const listElement = createListElement(list, false);
-        sharedListsContainer.appendChild(listElement);
+        const listElement = createHeaderListElement(list, false);
+        headerSharedListsContainer.appendChild(listElement);
     });
     
     // Show empty states if needed
     if (ownedLists.length === 0) {
-        myListsContainer.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 1rem; font-size: 0.875rem;">No owned lists</div>';
+        headerMyListsContainer.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 0.5rem; font-size: 0.75rem;">No owned lists</div>';
     }
     
     if (sharedLists.length === 0) {
-        sharedListsContainer.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 1rem; font-size: 0.875rem;">No shared lists</div>';
+        headerSharedListsContainer.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 0.5rem; font-size: 0.75rem;">No shared lists</div>';
     }
     
-    // Update current list actions
-    updateCurrentListActions();
+    // Update current list indicator and actions
+    updateCurrentListIndicator();
+    updateHeaderCurrentListActions();
 }
 
 function createListElement(list, isOwned) {
@@ -446,6 +466,78 @@ function createListElement(list, isOwned) {
     return listElement;
 }
 
+function createHeaderListElement(list, isOwned) {
+    const listElement = document.createElement('div');
+    listElement.className = `dropdown-list-item ${list.id === currentListId ? 'active' : ''}`;
+    listElement.onclick = () => selectHeaderList(list.id);
+    
+    // Create badges
+    const badges = [];
+    if (list.is_default) {
+        badges.push('<span class="list-badge default">Default</span>');
+    }
+    
+    if (isOwned) {
+        // For owned lists, show if they're shared or private
+        if (list.is_shared) {
+            badges.push('<span class="list-badge shared">Shared</span>');
+        } else {
+            badges.push('<span class="list-badge private">Private</span>');
+        }
+    } else {
+        // For shared lists, show permission level
+        const permission = list.role || 'read';
+        badges.push(`<span class="list-badge shared">${permission}</span>`);
+    }
+    
+    // Create meta info
+    let metaInfo = `${list.item_count || 0} items`;
+    if (list.completed_count > 0) {
+        metaInfo += ` • ${list.completed_count} done`;
+    }
+    
+    if (!isOwned && list.owner_username) {
+        metaInfo += ` • by ${list.owner_username}`;
+    }
+    
+    listElement.innerHTML = `
+        <div class="dropdown-list-item-info">
+            <div class="dropdown-list-item-name">${list.name}</div>
+            <div class="dropdown-list-item-meta">${metaInfo}</div>
+        </div>
+        <div class="dropdown-list-item-badges">
+            ${badges.join('')}
+        </div>
+    `;
+    
+    return listElement;
+}
+
+function selectHeaderList(listId) {
+    if (listId === currentListId) {
+        // Close dropdown if same list selected
+        toggleShoppingListDropdown();
+        return;
+    }
+    
+    console.log('Selecting header list:', listId);
+    
+    // Update currentListId directly and call switch
+    currentListId = listId;
+    
+    // Update old selector if it exists (for compatibility)
+    const oldSelector = document.getElementById('listSelector');
+    if (oldSelector) {
+        oldSelector.value = listId.toString();
+    }
+    
+    // Close dropdown
+    toggleShoppingListDropdown();
+    
+    // Call the switch function
+    switchToList(listId);
+}
+
 function selectList(listId) {
     if (listId === currentListId) return;
     
@@ -462,6 +554,125 @@ function selectList(listId) {
     
     // Call the switch function
     switchToList(listId);
+}
+
+function updateCurrentListIndicator() {
+    const currentListIndicator = document.getElementById('currentListIndicator');
+    
+    if (!currentListId || !userShoppingLists) {
+        if (currentListIndicator) {
+            currentListIndicator.textContent = 'Select List';
+        }
+        return;
+    }
+    
+    const currentList = userShoppingLists.find(list => list.id === currentListId);
+    if (currentListIndicator && currentList) {
+        currentListIndicator.textContent = currentList.name;
+    }
+}
+
+function updateHeaderCurrentListActions() {
+    const headerCurrentListActions = document.getElementById('headerCurrentListActions');
+    const headerCurrentListName = document.getElementById('headerCurrentListName');
+    const headerCurrentListBadges = document.getElementById('headerCurrentListBadges');
+    const headerRenameListBtn = document.getElementById('headerRenameListBtn');
+    const headerDeleteListBtn = document.getElementById('headerDeleteListBtn');
+    const headerDefaultListBtn = document.getElementById('headerDefaultListBtn');
+    const headerSharingBtn = document.getElementById('headerSharingBtn');
+    
+    if (!currentListId || !userShoppingLists) {
+        if (headerCurrentListActions) {
+            headerCurrentListActions.style.display = 'none';
+        }
+        return;
+    }
+    
+    const currentList = userShoppingLists.find(list => list.id === currentListId);
+    if (!currentList) {
+        if (headerCurrentListActions) {
+            headerCurrentListActions.style.display = 'none';
+        }
+        return;
+    }
+    
+    // Show current list actions
+    if (headerCurrentListActions) {
+        headerCurrentListActions.style.display = 'block';
+    }
+    
+    if (headerCurrentListName) {
+        headerCurrentListName.textContent = currentList.name;
+    }
+    
+    // Update badges
+    const badges = [];
+    if (currentList.is_default) {
+        badges.push('<span class="list-badge default">Default</span>');
+    }
+    
+    const isOwned = currentList.role === 'owner';
+    if (isOwned) {
+        if (currentList.is_shared) {
+            badges.push('<span class="list-badge shared">Shared</span>');
+        } else {
+            badges.push('<span class="list-badge private">Private</span>');
+        }
+    } else {
+        badges.push(`<span class="list-badge shared">${currentList.role}</span>`);
+    }
+    
+    if (headerCurrentListBadges) {
+        headerCurrentListBadges.innerHTML = badges.join('');
+    }
+    
+    // Enable/disable action buttons based on permissions
+    const hasSelection = !!currentListId;
+    const canManage = canManageList();
+    
+    if (headerRenameListBtn) headerRenameListBtn.disabled = !canManage;
+    if (headerDeleteListBtn) headerDeleteListBtn.disabled = !canManage || userShoppingLists.length <= 1;
+    if (headerDefaultListBtn) headerDefaultListBtn.disabled = !canManage;
+    if (headerSharingBtn) headerSharingBtn.disabled = !canShareList();
+    
+    // Update default button appearance
+    const isCurrentDefault = currentList && currentList.is_default;
+    
+    if (headerDefaultListBtn) {
+        if (hasSelection && isCurrentDefault) {
+            headerDefaultListBtn.textContent = '★'; // Filled star for default
+            headerDefaultListBtn.title = 'Remove as default';
+            headerDefaultListBtn.style.color = '#ffd700'; // Gold color
+        } else {
+            headerDefaultListBtn.textContent = '⭐'; // Outline star
+            headerDefaultListBtn.title = 'Set as default';
+            headerDefaultListBtn.style.color = ''; // Reset color
+        }
+    }
+}
+
+function toggleShoppingListDropdown() {
+    const dropdown = document.getElementById('shoppingListDropdown');
+    if (dropdown) {
+        const isVisible = dropdown.style.display !== 'none';
+        dropdown.style.display = isVisible ? 'none' : 'block';
+        
+        if (!isVisible) {
+            // Dropdown was just opened, refresh the list
+            populateListSelector();
+        }
+    }
+}
+
+function toggleMemorySection() {
+    const memoryContent = document.getElementById('memoryContent');
+    const memoryChevron = document.getElementById('memoryChevron');
+    
+    if (memoryContent && memoryChevron) {
+        const isHidden = memoryContent.style.display === 'none';
+        memoryContent.style.display = isHidden ? 'block' : 'none';
+        memoryChevron.classList.toggle('rotated', isHidden);
+    }
 }
 
 async function switchToList(listId) {
@@ -1215,12 +1426,46 @@ async function toggleItem(categoryId, itemId) {
     }
 }
 
-function updateQuantity(categoryId, itemId, delta) {
+async function updateQuantity(categoryId, itemId, delta) {
+    // Check permissions
+    if (!canEditItems()) {
+        alert('You do not have permission to edit items in this list');
+        return;
+    }
+    
     const category = categories[categoryId];
     const item = category.items.find(item => item.id === itemId);
-    if (item) {
-        item.quantity = Math.max(1, item.quantity + delta);
+    if (!item) return;
+    
+    const newQuantity = Math.max(1, item.quantity + delta);
+    
+    // Don't send request if quantity didn't change
+    if (newQuantity === item.quantity) return;
+    
+    try {
+        // Update on server
+        await apiRequest(`/lists/${currentListId}/items/${itemId}`, {
+            method: 'PUT',
+            body: JSON.stringify({
+                name: item.name,
+                quantity: newQuantity,
+                category: item.category || categoryId,
+                priority: item.priority,
+                notes: item.notes || '',
+                completed: item.completed
+            })
+        });
+        
+        // Update local data only after successful server update
+        item.quantity = newQuantity;
         renderCategories();
+        updateStats();
+        
+        console.log(`Updated item ${item.name} quantity to ${newQuantity}`);
+        
+    } catch (error) {
+        console.error('Failed to update item quantity:', error);
+        alert(`Failed to update quantity: ${error.message}`);
     }
 }
 
@@ -2711,6 +2956,12 @@ document.addEventListener('DOMContentLoaded', function() {
         submitBtn.textContent = 'Create Account';
     });
 
+    // Shopping List Dropdown event listeners
+    const shoppingListToggle = document.getElementById('shoppingListToggle');
+    if (shoppingListToggle) {
+        shoppingListToggle.addEventListener('click', toggleShoppingListDropdown);
+    }
+    
     // Notification bell event listeners
     const notificationBell = document.getElementById('notificationBell');
     const clearAllBtn = document.getElementById('clearAllBtn');
@@ -2722,6 +2973,27 @@ document.addEventListener('DOMContentLoaded', function() {
     if (clearAllBtn) {
         clearAllBtn.addEventListener('click', window.markAllNotificationsRead);
     }
+    
+    // Click outside to close dropdowns
+    document.addEventListener('click', (e) => {
+        // Close shopping list dropdown
+        const shoppingListContainer = document.querySelector('.shopping-list-dropdown-container');
+        if (shoppingListContainer && !shoppingListContainer.contains(e.target)) {
+            const dropdown = document.getElementById('shoppingListDropdown');
+            if (dropdown && dropdown.style.display !== 'none') {
+                dropdown.style.display = 'none';
+            }
+        }
+        
+        // Close notification dropdown
+        const notificationContainer = document.querySelector('.notification-bell-container');
+        if (notificationContainer && !notificationContainer.contains(e.target)) {
+            const notificationDropdown = document.getElementById('notificationDropdown');
+            if (notificationDropdown && notificationDropdown.style.display !== 'none') {
+                notificationDropdown.style.display = 'none';
+            }
+        }
+    });
 
     // Initialize
     loadTheme();

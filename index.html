@@ -25,6 +25,63 @@
                         <div class="status-indicator online" id="statusIndicator"></div>
                         <span class="status-text">Online</span>
                     </div>
+                    
+                    <!-- Shopping List Dropdown -->
+                    <div class="shopping-list-dropdown-container">
+                        <button class="shopping-list-toggle" id="shoppingListToggle" title="Shopping Lists">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M3 6h18l-2 13H5L3 6z"/>
+                                <path d="M8 6V4c0-1 1-2 2-2h4c0 0 1 1 1 2v2"/>
+                            </svg>
+                            <span class="current-list-indicator" id="currentListIndicator">Select List</span>
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-left: 4px;">
+                                <polyline points="6,9 12,15 18,9"/>
+                            </svg>
+                        </button>
+                        <div class="shopping-list-dropdown" id="shoppingListDropdown" style="display: none;">
+                            <div class="dropdown-header">
+                                <h3>Shopping Lists</h3>
+                                <button class="new-list-btn-header" onclick="showNewListModal()" title="Create new list">+</button>
+                            </div>
+                            
+                            <!-- My Lists -->
+                            <div class="dropdown-category">
+                                <div class="dropdown-category-header">
+                                    <span class="dropdown-category-title">My Lists</span>
+                                    <span class="dropdown-category-count" id="headerMyListsCount">0</span>
+                                </div>
+                                <div class="dropdown-list-items" id="headerMyListsContainer">
+                                    <!-- Owned lists will be rendered here -->
+                                </div>
+                            </div>
+                            
+                            <!-- Shared with me -->
+                            <div class="dropdown-category">
+                                <div class="dropdown-category-header">
+                                    <span class="dropdown-category-title">Shared with me</span>
+                                    <span class="dropdown-category-count" id="headerSharedListsCount">0</span>
+                                </div>
+                                <div class="dropdown-list-items" id="headerSharedListsContainer">
+                                    <!-- Shared lists will be rendered here -->
+                                </div>
+                            </div>
+                            
+                            <!-- Current list actions -->
+                            <div class="dropdown-actions" id="headerCurrentListActions" style="display: none;">
+                                <div class="dropdown-actions-header">
+                                    <span class="dropdown-current-list-name" id="headerCurrentListName">Current List</span>
+                                    <div class="dropdown-current-list-badges" id="headerCurrentListBadges"></div>
+                                </div>
+                                <div class="dropdown-action-buttons">
+                                    <button class="dropdown-action-btn" onclick="showEditListModal()" title="Rename list" id="headerRenameListBtn">✏️</button>
+                                    <button class="dropdown-action-btn" onclick="toggleDefaultList()" title="Set as default" id="headerDefaultListBtn">⭐</button>
+                                    <button class="dropdown-action-btn" onclick="showSharingModal()" title="Manage sharing" id="headerSharingBtn">👥</button>
+                                    <button class="dropdown-action-btn delete" onclick="confirmDeleteList()" title="Delete list" id="headerDeleteListBtn">🗑️</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
                     <button class="theme-toggle" onclick="toggleTheme()" title="Toggle theme">☀️</button>
                     <div class="notification-bell-container">
                         <button class="notification-bell" id="notificationBell" title="Notifications">
@@ -140,50 +197,6 @@
         </main>
 
         <aside class="sidebar">
-            <!-- Shopping List Selector -->
-            <div class="list-selector-section">
-                <div class="list-selector-header">
-                    <h3 class="list-selector-title">Shopping Lists</h3>
-                    <button class="new-list-btn" onclick="showNewListModal()" title="Create new list">+</button>
-                </div>
-                
-                <!-- My Lists -->
-                <div class="list-category">
-                    <div class="list-category-header">
-                        <span class="list-category-title">My Lists</span>
-                        <span class="list-category-count" id="myListsCount">0</span>
-                    </div>
-                    <div class="list-items" id="myListsContainer">
-                        <!-- Owned lists will be rendered here -->
-                    </div>
-                </div>
-                
-                <!-- Shared with me -->
-                <div class="list-category">
-                    <div class="list-category-header">
-                        <span class="list-category-title">Shared with me</span>
-                        <span class="list-category-count" id="sharedListsCount">0</span>
-                    </div>
-                    <div class="list-items" id="sharedListsContainer">
-                        <!-- Shared lists will be rendered here -->
-                    </div>
-                </div>
-                
-                <!-- Current list actions -->
-                <div class="current-list-actions" id="currentListActions" style="display: none;">
-                    <div class="current-list-info">
-                        <span class="current-list-name" id="currentListName">No list selected</span>
-                        <div class="current-list-badges" id="currentListBadges"></div>
-                    </div>
-                    <div class="list-actions">
-                        <button class="list-action-btn" onclick="showEditListModal()" title="Rename list" id="renameListBtn" disabled>✏️</button>
-                        <button class="list-action-btn" onclick="toggleDefaultList()" title="Set as default" id="defaultListBtn" disabled>⭐</button>
-                        <button class="list-action-btn" onclick="showSharingModal()" title="Manage sharing" id="sharingBtn" disabled>👥</button>
-                        <button class="list-action-btn delete" onclick="confirmDeleteList()" title="Delete list" id="deleteListBtn" disabled>🗑️</button>
-                    </div>
-                </div>
-            </div>
-            
             <h2 class="sidebar-title">Add item</h2>
 
             <form class="add-form" onsubmit="addItem(event)">
@@ -195,43 +208,45 @@
                     </div>
                 </div>
 
-                <div class="form-group">
-                    <label class="form-label" for="itemQuantity">Quantity</label>
-                    <div class="quantity-input-group">
-                        <button type="button" class="qty-btn" onclick="adjustQuantity(-1)">−</button>
-                        <input type="number" class="form-input quantity-input" id="itemQuantity" value="1" min="1" required>
-                        <button type="button" class="qty-btn" onclick="adjustQuantity(1)">+</button>
+                <div class="form-row">
+                    <div class="form-group form-group-small">
+                        <label class="form-label" for="itemQuantity">Qty</label>
+                        <div class="quantity-input-group-compact">
+                            <button type="button" class="qty-btn-compact" onclick="adjustQuantity(-1)">−</button>
+                            <input type="number" class="form-input quantity-input-compact" id="itemQuantity" value="1" min="1" required>
+                            <button type="button" class="qty-btn-compact" onclick="adjustQuantity(1)">+</button>
+                        </div>
+                    </div>
+                    <div class="form-group form-group-large">
+                        <label class="form-label" for="itemCategory">Category</label>
+                        <select class="form-input form-select-compact" id="itemCategory" required>
+                            <option value="produce">Produce</option>
+                            <option value="dairy">Dairy</option>
+                            <option value="meat">Meat & Seafood</option>
+                            <option value="pantry">Pantry</option>
+                            <option value="frozen">Frozen</option>
+                            <option value="bakery">Bakery</option>
+                            <option value="beverages">Beverages</option>
+                            <option value="snacks">Snacks</option>
+                            <option value="household">Household</option>
+                            <option value="health">Health & Beauty</option>
+                        </select>
                     </div>
                 </div>
 
-                <div class="form-group">
-                    <label class="form-label" for="itemCategory">Category</label>
-                    <select class="form-input form-select" id="itemCategory" required>
-                        <option value="produce">Produce</option>
-                        <option value="dairy">Dairy</option>
-                        <option value="meat">Meat & Seafood</option>
-                        <option value="pantry">Pantry</option>
-                        <option value="frozen">Frozen</option>
-                        <option value="bakery">Bakery</option>
-                        <option value="beverages">Beverages</option>
-                        <option value="snacks">Snacks</option>
-                        <option value="household">Household</option>
-                        <option value="health">Health & Beauty</option>
-                    </select>
-                </div>
-
-                <div class="form-group">
-                    <label class="form-label" for="itemPriority">Priority</label>
-                    <select class="form-input form-select" id="itemPriority" required>
-                        <option value="low">Low</option>
-                        <option value="medium">Medium</option>
-                        <option value="high">High</option>
-                    </select>
-                </div>
-
-                <div class="form-group">
-                    <label class="form-label" for="itemNotes">Notes (optional)</label>
-                    <input type="text" class="form-input" id="itemNotes" placeholder="Brand, size, etc...">
+                <div class="form-row">
+                    <div class="form-group form-group-half">
+                        <label class="form-label" for="itemPriority">Priority</label>
+                        <select class="form-input form-select-compact" id="itemPriority" required>
+                            <option value="low">Low</option>
+                            <option value="medium">Medium</option>
+                            <option value="high">High</option>
+                        </select>
+                    </div>
+                    <div class="form-group form-group-half">
+                        <label class="form-label" for="itemNotes">Notes</label>
+                        <input type="text" class="form-input form-input-compact" id="itemNotes" placeholder="Optional...">
+                    </div>
                 </div>
 
                 <button type="submit" class="add-btn">
@@ -244,16 +259,21 @@
             </form>
 
             <div class="memory-section">
-                <h3 class="memory-title">
+                <button class="memory-toggle" onclick="toggleMemorySection()" type="button">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M9 11H5a2 2 0 00-2 2v7a2 2 0 002 2h11a2 2 0 002-2v-7a2 2 0 00-2-2h-4"/>
                         <polyline points="9,11 12,14 15,11"/>
                         <line x1="12" y1="14" x2="12" y2="3"/>
                     </svg>
                     Shopping Memory
-                </h3>
-                <div class="memory-stats" id="memoryStats">0 items remembered • 0 total uses</div>
-                <div class="frequent-items" id="frequentItems"></div>
+                    <svg class="memory-chevron" id="memoryChevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="6,9 12,15 18,9"/>
+                    </svg>
+                </button>
+                <div class="memory-content" id="memoryContent" style="display: none;">
+                    <div class="memory-stats" id="memoryStats">0 items remembered • 0 total uses</div>
+                    <div class="frequent-items" id="frequentItems"></div>
+                </div>
             </div>
         </aside>
     </div>
