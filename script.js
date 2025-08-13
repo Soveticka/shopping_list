@@ -21,7 +21,16 @@ let currentUser = null;
 let authToken = localStorage.getItem('authToken');
 let selectedSuggestionIndex = -1;
 let currentListId = null;
+let currentListPermission = null; // 'read', 'write', or 'admin'
+let currentListIsOwner = false;
 let userShoppingLists = [];
+
+// Auto-update system
+let pollingIntervalId = null;
+let lastListUpdate = null;
+let lastNotificationUpdate = null;
+let pollingPaused = false;
+const POLLING_INTERVAL = 2000; // 2 seconds for testing
 let isEditingList = false;
 let editingListId = null;
 
@@ -173,6 +182,13 @@ function logout() {
     currentListId = null;
     localStorage.removeItem('authToken');
     
+    // Stop auto-update polling
+    stopAutoUpdate();
+    
+    // Reset polling timestamps
+    lastListUpdate = null;
+    lastNotificationUpdate = null;
+    
     // Clear UI
     categories.produce.items = [];
     categories.dairy.items = [];
@@ -215,11 +231,16 @@ async function loadGroceryMemory() {
     }
 }
 
+async function loadUserShoppingLists() {
+    console.log('Loading shopping lists...');
+    const listsResponse = await apiRequest('/lists');
+    userShoppingLists = listsResponse.lists;
+    return userShoppingLists;
+}
+
 async function loadShoppingList() {
     try {
-        console.log('Loading shopping lists...');
-        const listsResponse = await apiRequest('/lists');
-        userShoppingLists = listsResponse.lists;
+        await loadUserShoppingLists();
         
         console.log('User lists:', userShoppingLists);
         
@@ -259,6 +280,17 @@ async function loadShoppingList() {
         console.log('Loading items for list:', currentListId);
         const listResponse = await apiRequest(`/lists/${currentListId}`);
         const list = listResponse.list;
+        
+        // Store permission information
+        currentListPermission = list.user_permission || 'read';
+        currentListIsOwner = list.is_owner || false;
+        console.log('Current list permissions:', { permission: currentListPermission, isOwner: currentListIsOwner });
+        
+        // Initialize last update timestamp
+        lastListUpdate = new Date(list.updated_at).getTime();
+        
+        // Update UI based on permissions
+        updateUIBasedOnPermissions();
         
         console.log('Loaded list:', list);
         
@@ -381,6 +413,18 @@ async function switchShoppingList() {
             }
             
             const list = listResponse.list;
+            
+            // Store permission information
+            currentListPermission = list.user_permission || 'read';
+            currentListIsOwner = list.is_owner || false;
+            console.log('Updated list permissions:', { permission: currentListPermission, isOwner: currentListIsOwner });
+            
+            // Update last update timestamp for new list
+            lastListUpdate = new Date(list.updated_at).getTime();
+            
+            // Update UI based on permissions
+            updateUIBasedOnPermissions();
+            
             console.log('Processing list:', list.name, 'with', list.items ? list.items.length : 0, 'items');
             
             // Clear existing items
@@ -700,6 +744,17 @@ async function initializeApp(skipModalOnError = false) {
         // Initialize list form handling
         initializeListFormHandling();
         
+        // Load notifications
+        console.log('Loading notifications...');
+        try {
+            await loadNotifications();
+        } catch (error) {
+            console.warn('Failed to load notifications:', error);
+        }
+        
+        // Start auto-update polling
+        startAutoUpdate();
+        
         console.log('App initialized successfully');
         
     } catch (error) {
@@ -851,6 +906,12 @@ function addFrequentItem(name, category, priority) {
 async function addItem(event) {
     event.preventDefault();
     
+    // Check permissions
+    if (!canAddItems()) {
+        alert('You do not have permission to add items to this list');
+        return;
+    }
+    
     console.log('Adding item, currentListId:', currentListId);
     console.log('authToken:', authToken ? 'present' : 'missing');
     console.log('currentUser:', currentUser);
@@ -912,6 +973,9 @@ async function addItem(event) {
         renderCategories();
         updateStats();
         
+        // Update timestamp to prevent immediate re-fetch (add small buffer to account for timing differences)
+        lastListUpdate = Date.now() + 1000; // Add 1 second buffer
+        
         // Refresh memory
         await loadGroceryMemory();
         
@@ -923,13 +987,39 @@ async function addItem(event) {
     }
 }
 
-function toggleItem(categoryId, itemId) {
+async function toggleItem(categoryId, itemId) {
     const category = categories[categoryId];
     const item = category.items.find(item => item.id === itemId);
-    if (item) {
-        item.completed = !item.completed;
+    if (!item) return;
+    
+    // Optimistically update UI
+    const originalCompleted = item.completed;
+    item.completed = !item.completed;
+    renderCategories();
+    updateStats();
+    
+    try {
+        // Call API to persist change
+        const response = await apiRequest(`/lists/${currentListId}/items/${itemId}/toggle`, {
+            method: 'PUT'
+        });
+        
+        // Update with server response to ensure consistency
+        item.completed = response.item.completed;
         renderCategories();
         updateStats();
+        
+        // Update timestamp to prevent immediate re-fetch (add small buffer to account for timing differences)
+        lastListUpdate = Date.now() + 1000; // Add 1 second buffer
+        
+    } catch (error) {
+        // Revert optimistic update on error
+        item.completed = originalCompleted;
+        renderCategories();
+        updateStats();
+        
+        console.error('Failed to toggle item:', error);
+        alert(`Failed to update item: ${error.message}`);
     }
 }
 
@@ -942,11 +1032,46 @@ function updateQuantity(categoryId, itemId, delta) {
     }
 }
 
-function deleteItem(categoryId, itemId) {
+async function deleteItem(categoryId, itemId) {
+    // Check permissions
+    if (!canDeleteItems()) {
+        alert('You do not have permission to delete items from this list');
+        return;
+    }
+    
     const category = categories[categoryId];
+    const item = category.items.find(item => item.id === itemId);
+    if (!item) return;
+    
+    // Confirm deletion
+    if (!confirm(`Are you sure you want to delete "${item.name}"?`)) {
+        return;
+    }
+    
+    // Optimistically remove from UI
+    const originalItems = [...category.items];
     category.items = category.items.filter(item => item.id !== itemId);
     renderCategories();
     updateStats();
+    
+    try {
+        // Call API to persist change
+        await apiRequest(`/lists/${currentListId}/items/${itemId}`, {
+            method: 'DELETE'
+        });
+        
+        // Update timestamp to prevent immediate re-fetch (add small buffer to account for timing differences)
+        lastListUpdate = Date.now() + 1000; // Add 1 second buffer
+        
+    } catch (error) {
+        // Revert optimistic update on error
+        category.items = originalItems;
+        renderCategories();
+        updateStats();
+        
+        console.error('Failed to delete item:', error);
+        alert(`Failed to delete item: ${error.message}`);
+    }
 }
 
 function updateDisplay() {
@@ -1051,6 +1176,12 @@ function renderCategories() {
 }
 
 async function shareList() {
+    // Check permissions
+    if (!canShareList()) {
+        alert('You do not have permission to share this list');
+        return;
+    }
+    
     if (!currentListId) {
         alert('No shopping list selected to share');
         return;
@@ -1064,6 +1195,9 @@ async function shareList() {
         const shareUrl = response.share_url;
         const listName = response.list_name;
 
+        // Pause polling while share modal is open
+        pausePolling();
+        
         // Create a modal to show the share URL
         showShareModal(shareUrl, listName);
 
@@ -1122,6 +1256,11 @@ function hideShareModal() {
     if (modal) {
         modal.remove();
     }
+    
+    // Resume polling when modal closes
+    setTimeout(() => {
+        resumePolling();
+    }, 500);
 }
 
 function legacyShareList() {
@@ -1153,6 +1292,780 @@ function legacyShareList() {
     }
 }
 
+// Share dropdown functions
+function toggleShareDropdown() {
+    const dropdown = document.getElementById('shareDropdown');
+    const isVisible = dropdown.style.display === 'block';
+    
+    // Close all other dropdowns
+    document.querySelectorAll('.share-menu').forEach(menu => {
+        if (menu !== dropdown) {
+            menu.style.display = 'none';
+        }
+    });
+    
+    dropdown.style.display = isVisible ? 'none' : 'block';
+}
+
+// Close dropdown when clicking outside
+document.addEventListener('click', function(event) {
+    if (!event.target.closest('.share-dropdown')) {
+        document.querySelectorAll('.share-menu').forEach(menu => {
+            menu.style.display = 'none';
+        });
+    }
+});
+
+// Permission helper functions
+function hasWritePermission() {
+    return currentListPermission === 'write' || currentListPermission === 'admin';
+}
+
+function hasAdminPermission() {
+    return currentListPermission === 'admin';
+}
+
+function canAddItems() {
+    return hasWritePermission();
+}
+
+function canEditItems() {
+    return hasWritePermission();
+}
+
+function canDeleteItems() {
+    return hasWritePermission();
+}
+
+function canShareList() {
+    return hasAdminPermission(); // Only owners can share lists
+}
+
+function canManageList() {
+    return hasAdminPermission(); // Only owners can rename/delete lists
+}
+
+function updateUIBasedOnPermissions() {
+    console.log('Updating UI based on permissions:', { permission: currentListPermission, isOwner: currentListIsOwner });
+    
+    // Add item form
+    const addForm = document.querySelector('.add-form');
+    const addButton = document.querySelector('.add-btn');
+    if (addForm && addButton) {
+        if (canAddItems()) {
+            addForm.style.display = 'flex';
+            addButton.disabled = false;
+            addButton.title = '';
+        } else {
+            addForm.style.display = 'none';
+        }
+    }
+    
+    // Bulk actions (edit/delete operations)
+    const bulkActions = document.querySelectorAll('.bulk-btn');
+    bulkActions.forEach(btn => {
+        const isEditAction = btn.onclick?.toString().includes('markPurchased') || 
+                           btn.onclick?.toString().includes('markNeeded') ||
+                           btn.onclick?.toString().includes('deleteSelected');
+        
+        if (isEditAction && !canEditItems()) {
+            btn.disabled = true;
+            btn.style.opacity = '0.5';
+            btn.title = 'You need write permission to perform this action';
+        } else {
+            btn.disabled = false;
+            btn.style.opacity = '1';
+            btn.title = '';
+        }
+    });
+    
+    // Share dropdown
+    const shareDropdown = document.querySelector('.share-dropdown');
+    if (shareDropdown) {
+        if (canShareList()) {
+            shareDropdown.style.display = 'inline-block';
+        } else {
+            shareDropdown.style.display = 'none';
+        }
+    }
+    
+    // List management buttons
+    const renameBtn = document.getElementById('renameListBtn');
+    const deleteBtn = document.getElementById('deleteListBtn');
+    const defaultBtn = document.getElementById('defaultListBtn');
+    
+    if (renameBtn && deleteBtn) {
+        const canManage = canManageList();
+        renameBtn.disabled = !canManage;
+        deleteBtn.disabled = !canManage;
+        defaultBtn.disabled = !canManage; // Only owners can set default
+        
+        if (!canManage) {
+            renameBtn.style.opacity = '0.5';
+            deleteBtn.style.opacity = '0.5';
+            defaultBtn.style.opacity = '0.5';
+            renameBtn.title = 'Only the list owner can rename lists';
+            deleteBtn.title = 'Only the list owner can delete lists';
+            defaultBtn.title = 'Only the list owner can set default lists';
+        } else {
+            renameBtn.style.opacity = '1';
+            deleteBtn.style.opacity = '1';
+            defaultBtn.style.opacity = '1';
+            renameBtn.title = 'Rename list';
+            deleteBtn.title = 'Delete list';
+            defaultBtn.title = 'Set as default';
+        }
+    }
+}
+
+// User invitation functions
+function showInviteModal() {
+    // Hide the share dropdown first
+    document.getElementById('shareDropdown').style.display = 'none';
+    
+    // Check permissions
+    if (!canShareList()) {
+        alert('You do not have permission to share this list');
+        return;
+    }
+    
+    if (!currentListId) {
+        alert('No shopping list selected to share');
+        return;
+    }
+
+    // Pause polling while modal is open
+    pausePolling();
+
+    // Create modal HTML for user invitation
+    const modalHtml = `
+        <div class="auth-overlay" id="inviteModalOverlay" style="display: flex;">
+            <div class="auth-modal">
+                <div class="auth-header">
+                    <h2 class="auth-title">Invite User to List</h2>
+                    <p class="auth-subtitle">Enter a username to invite them to collaborate</p>
+                </div>
+                <div class="auth-error" id="inviteError" style="display: none;"></div>
+                <div class="auth-success" id="inviteSuccess" style="display: none;"></div>
+                <form id="inviteForm">
+                    <div class="form-group">
+                        <label class="form-label" for="inviteUsername">Username:</label>
+                        <input type="text" class="form-input" id="inviteUsername" placeholder="Enter username..." required autocomplete="off">
+                        <div id="userSearchResults" style="display: none; margin-top: 0.5rem;"></div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="invitePermission">Permission Level:</label>
+                        <select class="form-input form-select" id="invitePermission" required>
+                            <option value="read">Read Only (can view and check items)</option>
+                            <option value="write">Read & Write (can add, edit, delete items)</option>
+                        </select>
+                    </div>
+                    <div class="auth-actions">
+                        <button type="button" class="auth-btn secondary" onclick="hideInviteModal()">Cancel</button>
+                        <button type="submit" class="auth-btn primary">Send Invitation</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    `;
+
+    // Add modal to body
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+    // Set up form submission
+    document.getElementById('inviteForm').addEventListener('submit', handleInviteSubmit);
+    
+    // Set up username search
+    document.getElementById('inviteUsername').addEventListener('input', searchUsers);
+}
+
+function hideInviteModal() {
+    const modal = document.getElementById('inviteModalOverlay');
+    if (modal) {
+        modal.remove();
+    }
+    
+    // Resume polling when modal closes
+    setTimeout(() => {
+        resumePolling();
+    }, 500);
+}
+
+async function searchUsers(event) {
+    const query = event.target.value.trim();
+    const resultsDiv = document.getElementById('userSearchResults');
+    
+    if (query.length < 2) {
+        resultsDiv.style.display = 'none';
+        return;
+    }
+    
+    try {
+        const response = await apiRequest(`/users/search?q=${encodeURIComponent(query)}`);
+        const users = response.users;
+        
+        if (users.length === 0) {
+            resultsDiv.innerHTML = '<div style="padding: 0.5rem; color: var(--text-secondary); font-size: 0.875rem;">No users found</div>';
+            resultsDiv.style.display = 'block';
+            return;
+        }
+        
+        resultsDiv.innerHTML = users.map(user => `
+            <div class="user-search-result" onclick="selectUser('${user.username}')" 
+                 style="padding: 0.5rem; cursor: pointer; border-bottom: 1px solid var(--border-light); font-size: 0.875rem;">
+                <strong>${user.username}</strong>
+                <div style="color: var(--text-secondary); font-size: 0.75rem;">${user.email}</div>
+            </div>
+        `).join('');
+        
+        resultsDiv.style.display = 'block';
+        
+    } catch (error) {
+        console.error('Failed to search users:', error);
+    }
+}
+
+function selectUser(username) {
+    document.getElementById('inviteUsername').value = username;
+    document.getElementById('userSearchResults').style.display = 'none';
+}
+
+async function handleInviteSubmit(event) {
+    event.preventDefault();
+    
+    const username = document.getElementById('inviteUsername').value.trim();
+    const permission = document.getElementById('invitePermission').value;
+    const errorEl = document.getElementById('inviteError');
+    const successEl = document.getElementById('inviteSuccess');
+    
+    // Clear previous messages
+    errorEl.style.display = 'none';
+    successEl.style.display = 'none';
+    
+    if (!username) {
+        errorEl.textContent = 'Please enter a username';
+        errorEl.style.display = 'block';
+        return;
+    }
+    
+    try {
+        const response = await apiRequest(`/lists/${currentListId}/invite`, {
+            method: 'POST',
+            body: JSON.stringify({
+                username: username,
+                permission: permission
+            })
+        });
+        
+        successEl.textContent = `Invitation sent to ${username}`;
+        successEl.style.display = 'block';
+        
+        // Clear form
+        document.getElementById('inviteForm').reset();
+        document.getElementById('userSearchResults').style.display = 'none';
+        
+        // Auto-close after success
+        setTimeout(() => {
+            hideInviteModal();
+        }, 2000);
+        
+    } catch (error) {
+        console.error('Failed to send invitation:', error);
+        errorEl.textContent = `Failed to send invitation: ${error.message}`;
+        errorEl.style.display = 'block';
+    }
+}
+
+// Header notification bell functions
+window.toggleNotifications = function() {
+    console.log('toggleNotifications called');
+    const dropdown = document.getElementById('notificationDropdown');
+    const isVisible = dropdown.style.display === 'block';
+    
+    // Close all other dropdowns
+    document.querySelectorAll('.share-menu, .notification-dropdown').forEach(menu => {
+        if (menu !== dropdown) {
+            menu.style.display = 'none';
+        }
+    });
+    
+    dropdown.style.display = isVisible ? 'none' : 'block';
+    
+    if (!isVisible) {
+        // Load latest notifications when opening
+        loadNotifications();
+    }
+}
+
+// Close notification dropdown when clicking outside
+document.addEventListener('click', function(event) {
+    if (!event.target.closest('.notification-bell-container')) {
+        document.getElementById('notificationDropdown').style.display = 'none';
+    }
+});
+
+// Notifications functions
+async function loadNotifications() {
+    try {
+        const response = await apiRequest('/notifications');
+        const notifications = response.notifications;
+        
+        renderNotifications(notifications);
+        updateNotificationCount(notifications);
+        
+    } catch (error) {
+        console.error('Failed to load notifications:', error);
+    }
+}
+
+function renderNotifications(notifications) {
+    const list = document.getElementById('headerNotificationsList');
+    const noNotifications = document.getElementById('noNotifications');
+    
+    // Filter to show only unread notifications
+    const unreadNotifications = notifications.filter(n => !n.is_read);
+    
+    if (unreadNotifications.length === 0) {
+        list.innerHTML = '';
+        noNotifications.style.display = 'flex';
+        return;
+    }
+    
+    noNotifications.style.display = 'none';
+    
+    list.innerHTML = unreadNotifications.map(notification => {
+        const isInvitation = notification.type === 'share_invitation';
+        const data = notification.data || {};
+        
+        return `
+            <div class="notification-item ${notification.is_read ? '' : 'unread'}" data-notification-id="${notification.id}">
+                <div class="notification-header-content">
+                    <div class="notification-title">${notification.title}</div>
+                    <button class="close-notification-btn" data-notification-id="${notification.id}" title="Dismiss notification">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="18" y1="6" x2="6" y2="18"/>
+                            <line x1="6" y1="6" x2="18" y2="18"/>
+                        </svg>
+                    </button>
+                </div>
+                <div class="notification-message">${notification.message}</div>
+                ${isInvitation && !notification.is_read ? `
+                    <div class="notification-actions">
+                        <button class="notification-btn accept" onclick="respondToInvitation(${notification.id}, 'accepted')">
+                            Accept
+                        </button>
+                        <button class="notification-btn decline" onclick="respondToInvitation(${notification.id}, 'declined')">
+                            Decline
+                        </button>
+                    </div>
+                ` : ''}
+                <div class="notification-time">${formatNotificationTime(notification.created_at)}</div>
+            </div>
+        `;
+    }).join('');
+    
+    // Add event listeners for dismiss buttons (using event delegation)
+    setTimeout(() => {
+        document.querySelectorAll('.close-notification-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const notificationId = parseInt(btn.getAttribute('data-notification-id'));
+                window.dismissNotification(notificationId);
+            });
+        });
+    }, 0);
+}
+
+function updateNotificationCount(notifications) {
+    const unreadCount = notifications.filter(n => !n.is_read).length;
+    const badge = document.getElementById('notificationBadge');
+    const bell = document.querySelector('.notification-bell');
+    
+    if (unreadCount > 0) {
+        badge.textContent = unreadCount > 99 ? '99+' : unreadCount.toString();
+        badge.style.display = 'flex';
+        bell.classList.add('has-notifications');
+    } else {
+        badge.style.display = 'none';
+        bell.classList.remove('has-notifications');
+    }
+}
+
+function formatNotificationTime(timestamp) {
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diffMinutes = Math.floor((now - date) / (1000 * 60));
+    
+    if (diffMinutes < 1) return 'Just now';
+    if (diffMinutes < 60) return `${diffMinutes}m ago`;
+    
+    const diffHours = Math.floor(diffMinutes / 60);
+    if (diffHours < 24) return `${diffHours}h ago`;
+    
+    const diffDays = Math.floor(diffHours / 24);
+    if (diffDays < 7) return `${diffDays}d ago`;
+    
+    return date.toLocaleDateString();
+}
+
+async function respondToInvitation(notificationId, response) {
+    try {
+        // Convert 'accepted'/'declined' to 'accept'/'decline' for backend
+        const action = response === 'accepted' ? 'accept' : 'decline';
+        
+        await apiRequest(`/notifications/${notificationId}/respond`, {
+            method: 'POST',
+            body: JSON.stringify({ action })
+        });
+        
+        // Reload notifications and lists
+        await loadNotifications();
+        await loadUserShoppingLists();
+        populateListSelector();
+        
+        // Close notification dropdown
+        document.getElementById('notificationDropdown').style.display = 'none';
+        
+        // Show success message
+        if (response === 'accepted') {
+            // Show subtle success indicator instead of alert
+            showUpdateIndicator('notifications');
+            
+            // Optionally switch to the newly shared list
+            // Note: We don't have the list ID from the response, but the user can manually switch
+        } else {
+            // Show subtle decline indicator
+            showUpdateIndicator('notifications');
+        }
+        
+    } catch (error) {
+        console.error('Failed to respond to invitation:', error);
+        alert(`Failed to ${response} invitation: ${error.message}`);
+    }
+}
+
+// Make sure functions are globally available
+window.dismissNotification = async function(notificationId) {
+    console.log('dismissNotification called with ID:', notificationId);
+    console.log('Current authToken:', authToken ? 'present' : 'missing');
+    try {
+        // Find and animate the notification item
+        const notificationItem = document.querySelector(`[data-notification-id="${notificationId}"]`);
+        if (notificationItem) {
+            notificationItem.style.opacity = '0.5';
+            notificationItem.style.transform = 'scale(0.95)';
+        }
+        
+        // Mark notification as read (dismiss it)
+        console.log('Making API request to mark notification as read:', `/notifications/${notificationId}/read`);
+        const response = await apiRequest(`/notifications/${notificationId}/read`, {
+            method: 'PUT'
+        });
+        console.log('API response:', response);
+        
+        // Reload notifications to update UI
+        console.log('Reloading notifications...');
+        await loadNotifications();
+        console.log('Notifications reloaded');
+        
+    } catch (error) {
+        console.error('Failed to dismiss notification:', error);
+        
+        // Revert animation on error
+        const notificationItem = document.querySelector(`[data-notification-id="${notificationId}"]`);
+        if (notificationItem) {
+            notificationItem.style.opacity = '';
+            notificationItem.style.transform = '';
+        }
+        
+        alert(`Failed to dismiss notification: ${error.message}`);
+    }
+}
+
+window.markAllNotificationsRead = async function() {
+    console.log('markAllNotificationsRead called');
+    try {
+        const response = await apiRequest('/notifications');
+        const notifications = response.notifications;
+        
+        // Mark all unread notifications as read
+        const unreadNotifications = notifications.filter(n => !n.is_read);
+        
+        if (unreadNotifications.length === 0) {
+            // No unread notifications - just close dropdown
+            document.getElementById('notificationDropdown').style.display = 'none';
+            return;
+        }
+        
+        // Animate all unread notifications
+        unreadNotifications.forEach(notification => {
+            const notificationItem = document.querySelector(`[data-notification-id="${notification.id}"]`);
+            if (notificationItem) {
+                notificationItem.style.opacity = '0.6';
+                notificationItem.style.transition = 'opacity 0.3s ease';
+            }
+        });
+        
+        // Use Promise.all to mark all in parallel for better performance
+        await Promise.all(
+            unreadNotifications.map(notification =>
+                apiRequest(`/notifications/${notification.id}/read`, {
+                    method: 'PUT'
+                })
+            )
+        );
+        
+        // Reload notifications
+        await loadNotifications();
+        
+        // Close dropdown after marking all as read
+        setTimeout(() => {
+            document.getElementById('notificationDropdown').style.display = 'none';
+        }, 1000);
+        
+    } catch (error) {
+        console.error('Failed to mark notifications as read:', error);
+        alert('Failed to mark all notifications as read. Please try again.');
+    }
+}
+
+// Auto-update system
+function startAutoUpdate() {
+    console.log('Starting auto-update polling...');
+    if (pollingIntervalId) {
+        clearInterval(pollingIntervalId);
+    }
+    
+    updateConnectionStatus('online');
+    
+    pollingIntervalId = setInterval(async () => {
+        if (!authToken || !currentUser) {
+            console.log('No auth token or user, skipping polling');
+            return;
+        }
+        
+        if (pollingPaused) {
+            console.log('Polling paused, skipping update check');
+            return;
+        }
+        
+        try {
+            // Check for notification updates
+            await checkNotificationUpdates();
+            
+            // Check for list updates if we have a current list
+            if (currentListId) {
+                await checkListUpdates();
+            }
+        } catch (error) {
+            console.error('Polling error:', error);
+            
+            // Show offline status on network errors
+            if (error.message.includes('Failed to fetch') || error.message.includes('Network')) {
+                updateConnectionStatus('offline');
+                
+                // Try to reconnect after a delay
+                setTimeout(() => {
+                    if (!pollingPaused) {
+                        updateConnectionStatus('online');
+                    }
+                }, 10000); // 10 seconds
+            }
+            
+            // Don't stop polling on errors, just log them
+        }
+    }, POLLING_INTERVAL);
+}
+
+function stopAutoUpdate() {
+    console.log('Stopping auto-update polling...');
+    if (pollingIntervalId) {
+        clearInterval(pollingIntervalId);
+        pollingIntervalId = null;
+    }
+    updateConnectionStatus('offline');
+}
+
+function pausePolling() {
+    console.log('Pausing auto-update polling...');
+    pollingPaused = true;
+    updateConnectionStatus('paused');
+}
+
+function resumePolling() {
+    console.log('Resuming auto-update polling...');
+    pollingPaused = false;
+    updateConnectionStatus('online');
+}
+
+function updateConnectionStatus(status) {
+    const indicator = document.getElementById('statusIndicator');
+    const statusText = document.querySelector('.status-text');
+    
+    if (!indicator || !statusText) return;
+    
+    // Remove all status classes
+    indicator.className = 'status-indicator';
+    
+    // Add current status class
+    indicator.classList.add(status);
+    
+    // Update text
+    const statusTexts = {
+        'online': 'Online',
+        'offline': 'Offline',
+        'paused': 'Paused'
+    };
+    
+    statusText.textContent = statusTexts[status] || 'Unknown';
+    
+    // Update tooltip
+    const connectionStatus = document.getElementById('connectionStatus');
+    if (connectionStatus) {
+        const tooltips = {
+            'online': 'Auto-update is active - checking for changes every 5 seconds',
+            'offline': 'Auto-update is disabled',
+            'paused': 'Auto-update is temporarily paused while you are editing'
+        };
+        connectionStatus.title = tooltips[status] || 'Auto-update status';
+    }
+}
+
+async function checkNotificationUpdates() {
+    try {
+        const response = await apiRequest('/notifications');
+        const notifications = response.notifications;
+        
+        // Check if we have new notifications or updates
+        const latestNotificationTime = notifications.length > 0 ? 
+            Math.max(...notifications.map(n => new Date(n.created_at).getTime())) : 0;
+        
+        if (lastNotificationUpdate === null) {
+            // First time - just store the timestamp
+            lastNotificationUpdate = latestNotificationTime;
+            return;
+        }
+        
+        if (latestNotificationTime > lastNotificationUpdate) {
+            console.log('New notifications detected, updating...');
+            renderNotifications(notifications);
+            updateNotificationCount(notifications);
+            lastNotificationUpdate = latestNotificationTime;
+            
+            // Show subtle notification indicator
+            showUpdateIndicator('notifications');
+        }
+    } catch (error) {
+        console.error('Failed to check notification updates:', error);
+    }
+}
+
+async function checkListUpdates() {
+    try {
+        const response = await apiRequest(`/lists/${currentListId}`);
+        const list = response.list;
+        
+        const latestUpdateTime = new Date(list.updated_at).getTime();
+        
+        if (lastListUpdate === null) {
+            // First time - just store the timestamp
+            lastListUpdate = latestUpdateTime;
+            console.log('Initial list timestamp:', new Date(latestUpdateTime).toISOString());
+            return;
+        }
+        
+        console.log('Comparing timestamps:');
+        console.log('  Last known:', new Date(lastListUpdate).toISOString());
+        console.log('  Server now:', new Date(latestUpdateTime).toISOString());
+        console.log('  Difference:', latestUpdateTime - lastListUpdate, 'ms');
+        
+        if (latestUpdateTime > lastListUpdate) {
+            console.log('List updates detected, refreshing...');
+            
+            // Update local data
+            Object.keys(categories).forEach(cat => {
+                categories[cat].items = [];
+            });
+            
+            if (list.items && list.items.length > 0) {
+                list.items.forEach(item => {
+                    if (categories[item.category]) {
+                        categories[item.category].items.push({
+                            id: item.id,
+                            name: item.name,
+                            quantity: item.quantity,
+                            priority: item.priority,
+                            notes: item.notes || '',
+                            completed: item.completed
+                        });
+                    }
+                });
+            }
+            
+            renderCategories();
+            updateStats();
+            lastListUpdate = latestUpdateTime;
+            
+            // Show subtle update indicator
+            showUpdateIndicator('list');
+        } else {
+            console.log('No updates detected');
+        }
+    } catch (error) {
+        console.error('Failed to check list updates:', error);
+    }
+}
+
+function showUpdateIndicator(type) {
+    // Create a subtle flash indicator
+    const indicator = document.createElement('div');
+    indicator.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: rgba(34, 197, 94, 0.9);
+        color: white;
+        padding: 8px 16px;
+        border-radius: 4px;
+        font-size: 0.875rem;
+        z-index: 10000;
+        animation: slideIn 0.3s ease;
+    `;
+    
+    const messages = {
+        'notifications': 'Notifications updated',
+        'list': 'Shopping list updated'
+    };
+    
+    indicator.textContent = messages[type] || 'Updates received';
+    document.body.appendChild(indicator);
+    
+    // Add CSS animation if not already added
+    if (!document.getElementById('updateIndicatorStyles')) {
+        const style = document.createElement('style');
+        style.id = 'updateIndicatorStyles';
+        style.textContent = `
+            @keyframes slideIn {
+                from { transform: translateX(100%); opacity: 0; }
+                to { transform: translateX(0); opacity: 1; }
+            }
+        `;
+        document.head.appendChild(style);
+    }
+    
+    // Remove after 3 seconds
+    setTimeout(() => {
+        if (indicator.parentNode) {
+            indicator.style.animation = 'slideIn 0.3s ease reverse';
+            setTimeout(() => {
+                if (indicator.parentNode) {
+                    indicator.parentNode.removeChild(indicator);
+                }
+            }, 300);
+        }
+    }, 3000);
+}
+
 // Bulk actions (placeholder functions)
 function bulkSelect() { console.log('Bulk select'); }
 function markPurchased() { console.log('Mark purchased'); }
@@ -1181,6 +2094,18 @@ document.addEventListener('DOMContentLoaded', function() {
         const query = e.target.value;
         const suggestions = getAutocompleteItems(query);
         showAutocompleteSuggestions(suggestions);
+    });
+
+    // Pause polling while user is actively typing
+    itemNameInput.addEventListener('focus', () => {
+        pausePolling();
+    });
+    
+    itemNameInput.addEventListener('blur', () => {
+        // Resume polling after a short delay
+        setTimeout(() => {
+            resumePolling();
+        }, 1000);
     });
 
     itemNameInput.addEventListener('keydown', (e) => {
@@ -1263,6 +2188,18 @@ document.addEventListener('DOMContentLoaded', function() {
         submitBtn.classList.remove('loading-state');
         submitBtn.textContent = 'Create Account';
     });
+
+    // Notification bell event listeners
+    const notificationBell = document.getElementById('notificationBell');
+    const clearAllBtn = document.getElementById('clearAllBtn');
+    
+    if (notificationBell) {
+        notificationBell.addEventListener('click', window.toggleNotifications);
+    }
+    
+    if (clearAllBtn) {
+        clearAllBtn.addEventListener('click', window.markAllNotificationsRead);
+    }
 
     // Initialize
     loadTheme();

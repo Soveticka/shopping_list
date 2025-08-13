@@ -361,19 +361,39 @@ def get_shopping_lists():
         
         with get_db_connection() as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                # Get owned lists
                 cur.execute("""
                     SELECT 
                         sl.id, sl.name, sl.is_shared, sl.created_at, sl.updated_at,
                         COUNT(sli.id) as item_count,
                         COUNT(CASE WHEN sli.completed = true THEN 1 END) as completed_count,
-                        COALESCE((sl.id = u.default_list_id), false) as is_default
+                        COALESCE((sl.id = u.default_list_id), false) as is_default,
+                        'owner' as role,
+                        u.username as owner_username
                     FROM shopping_lists sl
                     LEFT JOIN shopping_list_items sli ON sl.id = sli.list_id
                     LEFT JOIN users u ON u.id = sl.owner_id
                     WHERE sl.owner_id = %s
-                    GROUP BY sl.id, u.default_list_id
-                    ORDER BY sl.updated_at DESC
-                """, (user_id,))
+                    GROUP BY sl.id, u.default_list_id, u.username
+                    
+                    UNION
+                    
+                    SELECT 
+                        sl.id, sl.name, sl.is_shared, sl.created_at, sl.updated_at,
+                        COUNT(sli.id) as item_count,
+                        COUNT(CASE WHEN sli.completed = true THEN 1 END) as completed_count,
+                        false as is_default,
+                        ls.permission as role,
+                        u.username as owner_username
+                    FROM shopping_lists sl
+                    LEFT JOIN shopping_list_items sli ON sl.id = sli.list_id
+                    LEFT JOIN users u ON u.id = sl.owner_id
+                    INNER JOIN list_shares ls ON ls.list_id = sl.id
+                    WHERE ls.user_id = %s AND ls.status = 'accepted'
+                    GROUP BY sl.id, ls.permission, u.username
+                    
+                    ORDER BY updated_at DESC
+                """, (user_id, user_id))
                 
                 lists = cur.fetchall()
                 
@@ -425,16 +445,22 @@ def get_shopping_list(list_id):
         
         with get_db_connection() as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
-                # Get list info
+                # Get list info and user's permission (check both owned and shared lists)
                 cur.execute("""
-                    SELECT id, name, is_shared, created_at, updated_at
-                    FROM shopping_lists
-                    WHERE id = %s AND owner_id = %s
-                """, (list_id, user_id))
+                    SELECT sl.id, sl.name, sl.is_shared, sl.created_at, sl.updated_at, 
+                           CASE 
+                               WHEN sl.owner_id = %s THEN 'admin'
+                               ELSE ls.permission
+                           END as user_permission,
+                           CASE WHEN sl.owner_id = %s THEN TRUE ELSE FALSE END as is_owner
+                    FROM shopping_lists sl
+                    LEFT JOIN list_shares ls ON ls.list_id = sl.id AND ls.user_id = %s AND ls.status = 'accepted'
+                    WHERE sl.id = %s AND (sl.owner_id = %s OR ls.id IS NOT NULL)
+                """, (user_id, user_id, user_id, list_id, user_id))
                 
                 list_data = cur.fetchone()
                 if not list_data:
-                    return jsonify({'error': 'Shopping list not found'}), 404
+                    return jsonify({'error': 'Shopping list not found or access denied'}), 404
                 
                 # Get list items
                 cur.execute("""
@@ -467,13 +493,18 @@ def add_list_item(list_id):
         
         with get_db_connection() as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
-                # Verify list ownership
-                cur.execute(
-                    "SELECT id FROM shopping_lists WHERE id = %s AND owner_id = %s",
-                    (list_id, user_id)
-                )
+                # Verify list access (owner or shared with write permission)
+                cur.execute("""
+                    SELECT sl.id 
+                    FROM shopping_lists sl
+                    LEFT JOIN list_shares ls ON ls.list_id = sl.id AND ls.user_id = %s AND ls.status = 'accepted'
+                    WHERE sl.id = %s AND (
+                        sl.owner_id = %s OR 
+                        (ls.id IS NOT NULL AND ls.permission IN ('write', 'admin'))
+                    )
+                """, (user_id, list_id, user_id))
                 if not cur.fetchone():
-                    return jsonify({'error': 'Shopping list not found'}), 404
+                    return jsonify({'error': 'Shopping list not found or access denied'}), 404
                 
                 # Add item
                 cur.execute("""
@@ -508,6 +539,101 @@ def add_list_item(list_id):
     except Exception as e:
         print(f"Add item error: {e}")
         return jsonify({'error': 'Failed to add item to shopping list'}), 500
+
+@app.route('/api/lists/<int:list_id>/items/<int:item_id>/toggle', methods=['PUT'])
+@jwt_required()
+def toggle_list_item(list_id, item_id):
+    try:
+        user_id = int(get_jwt_identity())
+        
+        with get_db_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                # Verify list access (owner or shared with write permission for toggling)
+                # Note: Even read-only users should be able to toggle items (like in shared view)
+                cur.execute("""
+                    SELECT sl.id 
+                    FROM shopping_lists sl
+                    LEFT JOIN list_shares ls ON ls.list_id = sl.id AND ls.user_id = %s AND ls.status = 'accepted'
+                    WHERE sl.id = %s AND (
+                        sl.owner_id = %s OR 
+                        ls.id IS NOT NULL
+                    )
+                """, (user_id, list_id, user_id))
+                if not cur.fetchone():
+                    return jsonify({'error': 'Shopping list not found or access denied'}), 404
+                
+                # Toggle the item's completed status
+                cur.execute("""
+                    UPDATE shopping_list_items 
+                    SET completed = NOT completed, updated_at = CURRENT_TIMESTAMP
+                    WHERE id = %s AND list_id = %s
+                    RETURNING id, name, completed
+                """, (item_id, list_id))
+                
+                item = cur.fetchone()
+                if not item:
+                    return jsonify({'error': 'Item not found'}), 404
+                
+                conn.commit()
+                
+                return jsonify({
+                    'message': 'Item toggled successfully',
+                    'item': {
+                        'id': item['id'],
+                        'name': item['name'],
+                        'completed': item['completed']
+                    }
+                }), 200
+                
+    except Exception as e:
+        print(f"Toggle item error: {e}")
+        return jsonify({'error': 'Failed to toggle item'}), 500
+
+@app.route('/api/lists/<int:list_id>/items/<int:item_id>', methods=['DELETE'])
+@jwt_required()
+def delete_list_item(list_id, item_id):
+    try:
+        user_id = int(get_jwt_identity())
+        
+        with get_db_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                # Verify list access (owner or shared with write permission)
+                cur.execute("""
+                    SELECT sl.id 
+                    FROM shopping_lists sl
+                    LEFT JOIN list_shares ls ON ls.list_id = sl.id AND ls.user_id = %s AND ls.status = 'accepted'
+                    WHERE sl.id = %s AND (
+                        sl.owner_id = %s OR 
+                        (ls.id IS NOT NULL AND ls.permission IN ('write', 'admin'))
+                    )
+                """, (user_id, list_id, user_id))
+                if not cur.fetchone():
+                    return jsonify({'error': 'Shopping list not found or access denied'}), 404
+                
+                # Delete the item
+                cur.execute("""
+                    DELETE FROM shopping_list_items 
+                    WHERE id = %s AND list_id = %s
+                    RETURNING id, name
+                """, (item_id, list_id))
+                
+                item = cur.fetchone()
+                if not item:
+                    return jsonify({'error': 'Item not found'}), 404
+                
+                conn.commit()
+                
+                return jsonify({
+                    'message': 'Item deleted successfully',
+                    'item': {
+                        'id': item['id'],
+                        'name': item['name']
+                    }
+                }), 200
+                
+    except Exception as e:
+        print(f"Delete item error: {e}")
+        return jsonify({'error': 'Failed to delete item'}), 500
 
 @app.route('/api/lists/<int:list_id>', methods=['PUT'])
 @jwt_required()
@@ -786,6 +912,280 @@ def toggle_shared_item(share_token, item_id):
     except Exception as e:
         print(f"Toggle shared item error: {e}")
         return jsonify({'error': 'Failed to update item'}), 500
+
+# User search and notifications routes
+@app.route('/api/users/search', methods=['GET'])
+@jwt_required()
+def search_users():
+    try:
+        query = request.args.get('q', '').strip()
+        if not query or len(query) < 2:
+            return jsonify({'users': []}), 200
+        
+        user_id = int(get_jwt_identity())
+        
+        with get_db_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute("""
+                    SELECT id, username, email
+                    FROM users 
+                    WHERE id != %s 
+                    AND (LOWER(username) LIKE LOWER(%s) OR LOWER(email) LIKE LOWER(%s))
+                    ORDER BY username
+                    LIMIT 10
+                """, (user_id, f'%{query}%', f'%{query}%'))
+                
+                users = cur.fetchall()
+                
+                return jsonify({
+                    'users': [dict(user) for user in users]
+                })
+                
+    except Exception as e:
+        print(f"Search users error: {e}")
+        return jsonify({'error': 'Failed to search users'}), 500
+
+@app.route('/api/lists/<int:list_id>/invite', methods=['POST'])
+@jwt_required()
+def invite_user_to_list(list_id):
+    try:
+        user_id = int(get_jwt_identity())
+        data = request.json
+        
+        if not data or 'username' not in data:
+            return jsonify({'error': 'Username is required'}), 400
+        
+        username = data['username'].strip()
+        permission = data.get('permission', 'read')  # 'read' or 'write'
+        
+        if permission not in ['read', 'write']:
+            return jsonify({'error': 'Invalid permission level'}), 400
+        
+        with get_db_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                # Verify list ownership
+                cur.execute(
+                    "SELECT id, name FROM shopping_lists WHERE id = %s AND owner_id = %s",
+                    (list_id, user_id)
+                )
+                list_data = cur.fetchone()
+                
+                if not list_data:
+                    return jsonify({'error': 'Shopping list not found or not owned by user'}), 404
+                
+                # Find the user to invite
+                cur.execute(
+                    "SELECT id, username, email FROM users WHERE username = %s",
+                    (username,)
+                )
+                invite_user = cur.fetchone()
+                
+                if not invite_user:
+                    return jsonify({'error': 'User not found'}), 404
+                
+                if invite_user['id'] == user_id:
+                    return jsonify({'error': 'Cannot invite yourself'}), 400
+                
+                # Check if already shared
+                cur.execute(
+                    "SELECT id, status FROM list_shares WHERE list_id = %s AND user_id = %s",
+                    (list_id, invite_user['id'])
+                )
+                existing_share = cur.fetchone()
+                
+                if existing_share:
+                    if existing_share['status'] == 'accepted':
+                        return jsonify({'error': 'List is already shared with this user'}), 409
+                    elif existing_share['status'] == 'pending':
+                        return jsonify({'error': 'Invitation already pending for this user'}), 409
+                
+                # Get inviter info
+                cur.execute(
+                    "SELECT username FROM users WHERE id = %s",
+                    (user_id,)
+                )
+                inviter = cur.fetchone()
+                
+                # Create the share invitation
+                cur.execute("""
+                    INSERT INTO list_shares (list_id, user_id, permission, status)
+                    VALUES (%s, %s, %s, 'pending')
+                    ON CONFLICT (list_id, user_id) 
+                    DO UPDATE SET permission = EXCLUDED.permission, status = 'pending'
+                    RETURNING id
+                """, (list_id, invite_user['id'], permission))
+                
+                share_id = cur.fetchone()['id']
+                
+                # Create notification
+                notification_data = {
+                    'list_id': list_id,
+                    'list_name': list_data['name'],
+                    'inviter_user_id': user_id,
+                    'inviter_username': inviter['username'],
+                    'permission': permission,
+                    'share_id': share_id
+                }
+                
+                cur.execute("""
+                    INSERT INTO notifications (user_id, type, title, message, data)
+                    VALUES (%s, %s, %s, %s, %s)
+                """, (
+                    invite_user['id'],
+                    'share_invitation',
+                    f'Shopping List Invitation',
+                    f'{inviter["username"]} invited you to collaborate on "{list_data["name"]}" with {permission} access',
+                    psycopg2.extras.Json(notification_data)
+                ))
+                
+                conn.commit()
+                
+                return jsonify({
+                    'message': f'Invitation sent to {username}',
+                    'invited_user': {
+                        'id': invite_user['id'],
+                        'username': invite_user['username']
+                    }
+                }), 200
+                
+    except Exception as e:
+        print(f"Invite user error: {e}")
+        return jsonify({'error': 'Failed to send invitation'}), 500
+
+@app.route('/api/notifications', methods=['GET'])
+@jwt_required()
+def get_notifications():
+    try:
+        user_id = int(get_jwt_identity())
+        
+        with get_db_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute("""
+                    SELECT id, type, title, message, data, is_read, created_at
+                    FROM notifications
+                    WHERE user_id = %s
+                    ORDER BY created_at DESC
+                    LIMIT 50
+                """, (user_id,))
+                
+                notifications = cur.fetchall()
+                
+                return jsonify({
+                    'notifications': [dict(notification) for notification in notifications]
+                })
+                
+    except Exception as e:
+        print(f"Get notifications error: {e}")
+        return jsonify({'error': 'Failed to get notifications'}), 500
+
+@app.route('/api/notifications/<int:notification_id>/respond', methods=['POST'])
+@jwt_required()
+def respond_to_notification(notification_id):
+    try:
+        user_id = int(get_jwt_identity())
+        data = request.json
+        
+        if not data or 'action' not in data:
+            return jsonify({'error': 'Action is required'}), 400
+        
+        action = data['action']  # 'accept' or 'decline'
+        
+        if action not in ['accept', 'decline']:
+            return jsonify({'error': 'Invalid action'}), 400
+        
+        with get_db_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                # Get notification
+                cur.execute("""
+                    SELECT id, type, data
+                    FROM notifications
+                    WHERE id = %s AND user_id = %s AND type = 'share_invitation'
+                """, (notification_id, user_id))
+                
+                notification = cur.fetchone()
+                
+                if not notification:
+                    return jsonify({'error': 'Notification not found'}), 404
+                
+                notification_data = notification['data']
+                share_id = notification_data['share_id']
+                list_id = notification_data['list_id']
+                inviter_user_id = notification_data['inviter_user_id']
+                
+                if action == 'accept':
+                    # Update share status to accepted
+                    cur.execute(
+                        "UPDATE list_shares SET status = 'accepted' WHERE id = %s",
+                        (share_id,)
+                    )
+                    
+                    # Create success notification for inviter
+                    cur.execute("""
+                        INSERT INTO notifications (user_id, type, title, message, data)
+                        VALUES (%s, %s, %s, %s, %s)
+                    """, (
+                        inviter_user_id,
+                        'share_accepted',
+                        'Invitation Accepted',
+                        f'Your invitation to share "{notification_data["list_name"]}" was accepted',
+                        psycopg2.extras.Json({'list_id': list_id})
+                    ))
+                    
+                else:  # decline
+                    # Remove the share
+                    cur.execute(
+                        "DELETE FROM list_shares WHERE id = %s",
+                        (share_id,)
+                    )
+                    
+                    # Create declined notification for inviter
+                    cur.execute("""
+                        INSERT INTO notifications (user_id, type, title, message, data)
+                        VALUES (%s, %s, %s, %s, %s)
+                    """, (
+                        inviter_user_id,
+                        'share_declined',
+                        'Invitation Declined',
+                        f'Your invitation to share "{notification_data["list_name"]}" was declined',
+                        psycopg2.extras.Json({'list_id': list_id})
+                    ))
+                
+                # Mark notification as read
+                cur.execute(
+                    "UPDATE notifications SET is_read = TRUE WHERE id = %s",
+                    (notification_id,)
+                )
+                
+                conn.commit()
+                
+                return jsonify({
+                    'message': f'Invitation {action}ed successfully'
+                }), 200
+                
+    except Exception as e:
+        print(f"Respond to notification error: {e}")
+        return jsonify({'error': 'Failed to respond to notification'}), 500
+
+@app.route('/api/notifications/<int:notification_id>/read', methods=['PUT'])
+@jwt_required()
+def mark_notification_read(notification_id):
+    try:
+        user_id = int(get_jwt_identity())
+        
+        with get_db_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(
+                    "UPDATE notifications SET is_read = TRUE WHERE id = %s AND user_id = %s",
+                    (notification_id, user_id)
+                )
+                
+                conn.commit()
+                
+                return jsonify({'message': 'Notification marked as read'}), 200
+                
+    except Exception as e:
+        print(f"Mark notification read error: {e}")
+        return jsonify({'error': 'Failed to mark notification as read'}), 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.getenv('PORT', 3001)), debug=os.getenv('NODE_ENV') != 'production')

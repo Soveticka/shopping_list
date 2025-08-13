@@ -56,8 +56,21 @@ CREATE TABLE IF NOT EXISTS list_shares (
     list_id INTEGER REFERENCES shopping_lists(id) ON DELETE CASCADE,
     user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
     permission VARCHAR(20) DEFAULT 'read', -- 'read', 'write', 'admin'
+    status VARCHAR(20) DEFAULT 'pending', -- 'pending', 'accepted', 'declined'
     shared_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(list_id, user_id)
+);
+
+-- Create notifications table (for sharing invitations and other notifications)
+CREATE TABLE IF NOT EXISTS notifications (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    type VARCHAR(50) NOT NULL, -- 'share_invitation', 'share_accepted', etc.
+    title VARCHAR(255) NOT NULL,
+    message TEXT NOT NULL,
+    data JSON, -- Additional data like list_id, inviter_user_id, etc.
+    is_read BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Create indexes for better performance
@@ -67,6 +80,8 @@ CREATE INDEX IF NOT EXISTS idx_grocery_memory_user ON grocery_memory(user_id);
 CREATE INDEX IF NOT EXISTS idx_grocery_memory_usage ON grocery_memory(user_id, usage_count DESC, last_used DESC);
 CREATE INDEX IF NOT EXISTS idx_list_shares_list ON list_shares(list_id);
 CREATE INDEX IF NOT EXISTS idx_list_shares_user ON list_shares(user_id);
+CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id);
+CREATE INDEX IF NOT EXISTS idx_notifications_unread ON notifications(user_id, is_read);
 
 -- Create updated_at trigger function
 CREATE OR REPLACE FUNCTION update_updated_at_column()
@@ -81,3 +96,21 @@ $$ language 'plpgsql';
 CREATE TRIGGER update_users_updated_at BEFORE UPDATE ON users FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_shopping_lists_updated_at BEFORE UPDATE ON shopping_lists FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_shopping_list_items_updated_at BEFORE UPDATE ON shopping_list_items FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- Create function to update parent shopping list when items change
+CREATE OR REPLACE FUNCTION update_shopping_list_on_item_change()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- Update the parent shopping list's updated_at timestamp
+    UPDATE shopping_lists 
+    SET updated_at = CURRENT_TIMESTAMP 
+    WHERE id = COALESCE(NEW.list_id, OLD.list_id);
+    
+    RETURN COALESCE(NEW, OLD);
+END;
+$$ language 'plpgsql';
+
+-- Create triggers to update shopping list when items are modified
+CREATE TRIGGER update_list_on_item_insert AFTER INSERT ON shopping_list_items FOR EACH ROW EXECUTE FUNCTION update_shopping_list_on_item_change();
+CREATE TRIGGER update_list_on_item_update AFTER UPDATE ON shopping_list_items FOR EACH ROW EXECUTE FUNCTION update_shopping_list_on_item_change();
+CREATE TRIGGER update_list_on_item_delete AFTER DELETE ON shopping_list_items FOR EACH ROW EXECUTE FUNCTION update_shopping_list_on_item_change();

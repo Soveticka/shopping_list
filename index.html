@@ -21,7 +21,40 @@
                     <div class="stats" id="stats">0 needed • 0 purchased • 0 total</div>
                 </div>
                 <div class="header-right">
+                    <div class="connection-status" id="connectionStatus" title="Auto-update status">
+                        <div class="status-indicator online" id="statusIndicator"></div>
+                        <span class="status-text">Online</span>
+                    </div>
                     <button class="theme-toggle" onclick="toggleTheme()" title="Toggle theme">☀️</button>
+                    <div class="notification-bell-container">
+                        <button class="notification-bell" id="notificationBell" title="Notifications">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+                                <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+                            </svg>
+                            <span class="notification-badge" id="notificationBadge" style="display: none;">0</span>
+                        </button>
+                        <div class="notification-dropdown" id="notificationDropdown" style="display: none;">
+                            <div class="notification-header">
+                                <h3>Notifications</h3>
+                                <button class="clear-all-btn" id="clearAllBtn" title="Mark all as read">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <polyline points="20,6 9,17 4,12"/>
+                                    </svg>
+                                </button>
+                            </div>
+                            <div class="notification-list" id="headerNotificationsList">
+                                <!-- Notifications will be rendered here -->
+                            </div>
+                            <div class="no-notifications" id="noNotifications" style="display: none;">
+                                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
+                                    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+                                    <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+                                </svg>
+                                <p>No new notifications</p>
+                            </div>
+                        </div>
+                    </div>
                     <button class="theme-toggle" onclick="logout()" title="Logout">👤</button>
                 </div>
             </header>
@@ -68,14 +101,37 @@
                     </svg>
                     Delete
                 </button>
-                <button class="share-btn" onclick="shareList()">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8"/>
-                        <polyline points="16,6 12,2 8,6"/>
-                        <line x1="12" y1="2" x2="12" y2="15"/>
-                    </svg>
-                    Share
-                </button>
+                <div class="share-dropdown">
+                    <button class="share-btn" onclick="toggleShareDropdown()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8"/>
+                            <polyline points="16,6 12,2 8,6"/>
+                            <line x1="12" y1="2" x2="12" y2="15"/>
+                        </svg>
+                        Share
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-left: 4px;">
+                            <polyline points="6,9 12,15 18,9"/>
+                        </svg>
+                    </button>
+                    <div class="share-menu" id="shareDropdown" style="display: none;">
+                        <button class="share-option" onclick="shareList()">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+                                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+                            </svg>
+                            Share Link
+                        </button>
+                        <button class="share-option" onclick="showInviteModal()">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+                                <circle cx="9" cy="7" r="4"/>
+                                <path d="M22 21v-2a4 4 0 0 0-3-3.87"/>
+                                <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                            </svg>
+                            Invite User
+                        </button>
+                    </div>
+                </div>
             </div>
 
             <div class="categories" id="categoriesContainer">
