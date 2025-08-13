@@ -1017,6 +1017,11 @@ def invite_user_to_list(list_id):
                 
                 share_id = cur.fetchone()['id']
                 
+                # Mark the list as shared
+                cur.execute("""
+                    UPDATE shopping_lists SET is_shared = TRUE WHERE id = %s
+                """, (list_id,))
+                
                 # Create notification
                 notification_data = {
                     'list_id': list_id,
@@ -1186,6 +1191,153 @@ def mark_notification_read(notification_id):
     except Exception as e:
         print(f"Mark notification read error: {e}")
         return jsonify({'error': 'Failed to mark notification as read'}), 500
+
+# Sharing Management Endpoints
+@app.route('/api/lists/<int:list_id>/shares', methods=['GET'])
+@jwt_required()
+def get_list_shares(list_id):
+    try:
+        user_id = int(get_jwt_identity())
+        
+        with get_db_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                # Check if user owns the list
+                cur.execute("""
+                    SELECT owner_id FROM shopping_lists 
+                    WHERE id = %s AND owner_id = %s
+                """, (list_id, user_id))
+                
+                if not cur.fetchone():
+                    return jsonify({'error': 'Access denied - not list owner'}), 403
+                
+                # Get all shares for this list
+                cur.execute("""
+                    SELECT ls.id, ls.permission, ls.status, ls.shared_at,
+                           u.username, u.email
+                    FROM list_shares ls
+                    JOIN users u ON u.id = ls.user_id
+                    WHERE ls.list_id = %s
+                    ORDER BY ls.shared_at DESC
+                """, (list_id,))
+                
+                shares = cur.fetchall()
+                
+                return jsonify({'shares': shares}), 200
+                
+    except Exception as e:
+        print(f"Get list shares error: {e}")
+        return jsonify({'error': 'Failed to get list shares'}), 500
+
+@app.route('/api/lists/<int:list_id>/shares/<int:share_id>', methods=['PUT'])
+@jwt_required()
+def update_share_permission(list_id, share_id):
+    try:
+        user_id = int(get_jwt_identity())
+        data = request.json
+        
+        if not data or 'permission' not in data:
+            return jsonify({'error': 'Permission is required'}), 400
+        
+        permission = data['permission']
+        if permission not in ['read', 'write']:
+            return jsonify({'error': 'Invalid permission'}), 400
+        
+        with get_db_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                # Check if user owns the list
+                cur.execute("""
+                    SELECT owner_id FROM shopping_lists 
+                    WHERE id = %s AND owner_id = %s
+                """, (list_id, user_id))
+                
+                if not cur.fetchone():
+                    return jsonify({'error': 'Access denied - not list owner'}), 403
+                
+                # Update the share permission
+                cur.execute("""
+                    UPDATE list_shares 
+                    SET permission = %s
+                    WHERE id = %s AND list_id = %s
+                """, (permission, share_id, list_id))
+                
+                if cur.rowcount == 0:
+                    return jsonify({'error': 'Share not found'}), 404
+                
+                conn.commit()
+                
+                return jsonify({'message': 'Permission updated successfully'}), 200
+                
+    except Exception as e:
+        print(f"Update share permission error: {e}")
+        return jsonify({'error': 'Failed to update permission'}), 500
+
+@app.route('/api/lists/<int:list_id>/shares/<int:share_id>', methods=['DELETE'])
+@jwt_required()
+def remove_share(list_id, share_id):
+    try:
+        user_id = int(get_jwt_identity())
+        
+        with get_db_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                # Check if user owns the list
+                cur.execute("""
+                    SELECT owner_id FROM shopping_lists 
+                    WHERE id = %s AND owner_id = %s
+                """, (list_id, user_id))
+                
+                if not cur.fetchone():
+                    return jsonify({'error': 'Access denied - not list owner'}), 403
+                
+                # Get share info before deletion for notification
+                cur.execute("""
+                    SELECT ls.user_id, u.username, sl.name as list_name
+                    FROM list_shares ls
+                    JOIN users u ON u.id = ls.user_id  
+                    JOIN shopping_lists sl ON sl.id = ls.list_id
+                    WHERE ls.id = %s AND ls.list_id = %s
+                """, (share_id, list_id))
+                
+                share_info = cur.fetchone()
+                if not share_info:
+                    return jsonify({'error': 'Share not found'}), 404
+                
+                # Delete the share
+                cur.execute("""
+                    DELETE FROM list_shares 
+                    WHERE id = %s AND list_id = %s
+                """, (share_id, list_id))
+                
+                # Create notification for removed user
+                cur.execute("""
+                    INSERT INTO notifications (user_id, type, title, message, data, is_read)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                """, (
+                    share_info['user_id'],
+                    'share_removed',
+                    'Access Removed',
+                    f'You no longer have access to "{share_info["list_name"]}"',
+                    psycopg2.extras.Json({'list_id': list_id}),
+                    False
+                ))
+                
+                # Update list sharing status if no more shares
+                cur.execute("""
+                    SELECT COUNT(*) as share_count FROM list_shares WHERE list_id = %s
+                """, (list_id,))
+                share_count = cur.fetchone()['share_count']
+                
+                if share_count == 0:
+                    cur.execute("""
+                        UPDATE shopping_lists SET is_shared = FALSE WHERE id = %s
+                    """, (list_id,))
+                
+                conn.commit()
+                
+                return jsonify({'message': 'User removed from list successfully'}), 200
+                
+    except Exception as e:
+        print(f"Remove share error: {e}")
+        return jsonify({'error': 'Failed to remove user from list'}), 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.getenv('PORT', 3001)), debug=os.getenv('NODE_ENV') != 'production')

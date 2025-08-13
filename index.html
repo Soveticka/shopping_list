@@ -146,13 +146,39 @@
                     <h3 class="list-selector-title">Shopping Lists</h3>
                     <button class="new-list-btn" onclick="showNewListModal()" title="Create new list">+</button>
                 </div>
-                <div class="current-list">
-                    <select class="list-selector" id="listSelector" onchange="switchShoppingList()">
-                        <option value="">Select a shopping list...</option>
-                    </select>
+                
+                <!-- My Lists -->
+                <div class="list-category">
+                    <div class="list-category-header">
+                        <span class="list-category-title">My Lists</span>
+                        <span class="list-category-count" id="myListsCount">0</span>
+                    </div>
+                    <div class="list-items" id="myListsContainer">
+                        <!-- Owned lists will be rendered here -->
+                    </div>
+                </div>
+                
+                <!-- Shared with me -->
+                <div class="list-category">
+                    <div class="list-category-header">
+                        <span class="list-category-title">Shared with me</span>
+                        <span class="list-category-count" id="sharedListsCount">0</span>
+                    </div>
+                    <div class="list-items" id="sharedListsContainer">
+                        <!-- Shared lists will be rendered here -->
+                    </div>
+                </div>
+                
+                <!-- Current list actions -->
+                <div class="current-list-actions" id="currentListActions" style="display: none;">
+                    <div class="current-list-info">
+                        <span class="current-list-name" id="currentListName">No list selected</span>
+                        <div class="current-list-badges" id="currentListBadges"></div>
+                    </div>
                     <div class="list-actions">
                         <button class="list-action-btn" onclick="showEditListModal()" title="Rename list" id="renameListBtn" disabled>✏️</button>
                         <button class="list-action-btn" onclick="toggleDefaultList()" title="Set as default" id="defaultListBtn" disabled>⭐</button>
+                        <button class="list-action-btn" onclick="showSharingModal()" title="Manage sharing" id="sharingBtn" disabled>👥</button>
                         <button class="list-action-btn delete" onclick="confirmDeleteList()" title="Delete list" id="deleteListBtn" disabled>🗑️</button>
                     </div>
                 </div>

@@ -332,41 +332,247 @@ async function loadShoppingList() {
 
 // Shopping List Management Functions
 function populateListSelector() {
-    const selector = document.getElementById('listSelector');
-    const renameBtn = document.getElementById('renameListBtn');
-    const deleteBtn = document.getElementById('deleteListBtn');
-    const defaultBtn = document.getElementById('defaultListBtn');
+    const myListsContainer = document.getElementById('myListsContainer');
+    const sharedListsContainer = document.getElementById('sharedListsContainer');
+    const myListsCount = document.getElementById('myListsCount');
+    const sharedListsCount = document.getElementById('sharedListsCount');
+    const currentListActions = document.getElementById('currentListActions');
     
     // Check if elements exist
-    if (!selector || !renameBtn || !deleteBtn || !defaultBtn) {
-        console.warn('List selector elements not found');
+    if (!myListsContainer || !sharedListsContainer || !myListsCount || !sharedListsCount) {
+        console.warn('List container elements not found');
         return;
     }
     
-    // Clear existing options
-    selector.innerHTML = '<option value="">Select a shopping list...</option>';
+    // Clear existing content
+    myListsContainer.innerHTML = '';
+    sharedListsContainer.innerHTML = '';
     
-    // Add user's lists
-    if (userShoppingLists && userShoppingLists.length > 0) {
-        userShoppingLists.forEach(list => {
-            const option = document.createElement('option');
-            option.value = list.id;
-            option.textContent = list.name;
-            if (list.id === currentListId) {
-                option.selected = true;
-            }
-            selector.appendChild(option);
-        });
+    if (!userShoppingLists || userShoppingLists.length === 0) {
+        myListsContainer.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 1rem; font-size: 0.875rem;">No lists yet</div>';
+        myListsCount.textContent = '0';
+        sharedListsCount.textContent = '0';
+        currentListActions.style.display = 'none';
+        return;
     }
     
-    // Enable/disable action buttons
-    const hasSelection = currentListId && userShoppingLists && userShoppingLists.length > 0;
-    renameBtn.disabled = !hasSelection;
-    deleteBtn.disabled = !hasSelection || userShoppingLists.length <= 1;
-    defaultBtn.disabled = !hasSelection;
+    // Separate owned and shared lists
+    const ownedLists = userShoppingLists.filter(list => list.role === 'owner');
+    const sharedLists = userShoppingLists.filter(list => list.role !== 'owner');
+    
+    // Sort owned lists - default first, then by name
+    ownedLists.sort((a, b) => {
+        if (a.is_default && !b.is_default) return -1;
+        if (!a.is_default && b.is_default) return 1;
+        return a.name.localeCompare(b.name);
+    });
+    
+    // Sort shared lists by name
+    sharedLists.sort((a, b) => a.name.localeCompare(b.name));
+    
+    // Update counts
+    myListsCount.textContent = ownedLists.length.toString();
+    sharedListsCount.textContent = sharedLists.length.toString();
+    
+    // Render owned lists
+    ownedLists.forEach(list => {
+        const listElement = createListElement(list, true);
+        myListsContainer.appendChild(listElement);
+    });
+    
+    // Render shared lists  
+    sharedLists.forEach(list => {
+        const listElement = createListElement(list, false);
+        sharedListsContainer.appendChild(listElement);
+    });
+    
+    // Show empty states if needed
+    if (ownedLists.length === 0) {
+        myListsContainer.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 1rem; font-size: 0.875rem;">No owned lists</div>';
+    }
+    
+    if (sharedLists.length === 0) {
+        sharedListsContainer.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 1rem; font-size: 0.875rem;">No shared lists</div>';
+    }
+    
+    // Update current list actions
+    updateCurrentListActions();
+}
+
+function createListElement(list, isOwned) {
+    const listElement = document.createElement('div');
+    listElement.className = `list-item ${list.id === currentListId ? 'active' : ''}`;
+    listElement.onclick = () => selectList(list.id);
+    
+    // Create badges
+    const badges = [];
+    if (list.is_default) {
+        badges.push('<span class="list-badge default">Default</span>');
+    }
+    
+    if (isOwned) {
+        // For owned lists, show if they're shared or private
+        if (list.is_shared) {
+            badges.push('<span class="list-badge shared">Shared</span>');
+        } else {
+            badges.push('<span class="list-badge private">Private</span>');
+        }
+    } else {
+        // For shared lists, show permission level
+        const permission = list.role || 'read';
+        badges.push(`<span class="list-badge shared">${permission}</span>`);
+    }
+    
+    // Create meta info
+    let metaInfo = `${list.item_count || 0} items`;
+    if (list.completed_count > 0) {
+        metaInfo += ` • ${list.completed_count} done`;
+    }
+    
+    if (!isOwned && list.owner_username) {
+        metaInfo += ` • by ${list.owner_username}`;
+    }
+    
+    listElement.innerHTML = `
+        <div class="list-item-info">
+            <div class="list-item-name">${list.name}</div>
+            <div class="list-item-meta">${metaInfo}</div>
+        </div>
+        <div class="list-item-badges">
+            ${badges.join('')}
+        </div>
+    `;
+    
+    return listElement;
+}
+
+function selectList(listId) {
+    if (listId === currentListId) return;
+    
+    console.log('Selecting list:', listId);
+    
+    // Update currentListId directly and call switch
+    currentListId = listId;
+    
+    // Update old selector if it exists (for compatibility)
+    const oldSelector = document.getElementById('listSelector');
+    if (oldSelector) {
+        oldSelector.value = listId.toString();
+    }
+    
+    // Call the switch function
+    switchToList(listId);
+}
+
+async function switchToList(listId) {
+    console.log('Switching to list:', listId);
+    
+    try {
+        // Load the new list's items
+        const listResponse = await apiRequest(`/lists/${listId}`);
+        const list = listResponse.list;
+        
+        // Store permission information
+        currentListPermission = list.user_permission || 'read';
+        currentListIsOwner = list.is_owner || false;
+        console.log('Updated list permissions:', { permission: currentListPermission, isOwner: currentListIsOwner });
+        
+        // Update last update timestamp for new list
+        lastListUpdate = new Date(list.updated_at).getTime();
+        
+        // Update UI based on permissions
+        updateUIBasedOnPermissions();
+        
+        console.log('Processing list:', list.name, 'with', list.items ? list.items.length : 0, 'items');
+        
+        // Clear existing items
+        Object.keys(categories).forEach(cat => {
+            categories[cat].items = [];
+        });
+        
+        // Populate items from database
+        if (list.items && list.items.length > 0) {
+            console.log('Adding items to categories...');
+            list.items.forEach(item => {
+                if (categories[item.category]) {
+                    categories[item.category].items.push({
+                        id: item.id,
+                        name: item.name,
+                        quantity: item.quantity,
+                        priority: item.priority,
+                        notes: item.notes || '',
+                        completed: item.completed
+                    });
+                }
+            });
+        }
+        
+        // Update UI
+        updateDisplay();
+        updateStats();
+        populateListSelector(); // Update list selection and button states
+        
+        console.log('Successfully switched to list:', list.name);
+        
+    } catch (error) {
+        console.error('Failed to switch to list:', error);
+        alert(`Failed to load shopping list: ${error.message}`);
+    }
+}
+
+function updateCurrentListActions() {
+    const currentListActions = document.getElementById('currentListActions');
+    const currentListName = document.getElementById('currentListName');
+    const currentListBadges = document.getElementById('currentListBadges');
+    const renameBtn = document.getElementById('renameListBtn');
+    const deleteBtn = document.getElementById('deleteListBtn');
+    const defaultBtn = document.getElementById('defaultListBtn');
+    const sharingBtn = document.getElementById('sharingBtn');
+    
+    if (!currentListId || !userShoppingLists) {
+        currentListActions.style.display = 'none';
+        return;
+    }
+    
+    const currentList = userShoppingLists.find(list => list.id === currentListId);
+    if (!currentList) {
+        currentListActions.style.display = 'none';
+        return;
+    }
+    
+    // Show current list actions
+    currentListActions.style.display = 'block';
+    currentListName.textContent = currentList.name;
+    
+    // Update badges
+    const badges = [];
+    if (currentList.is_default) {
+        badges.push('<span class="list-badge default">Default</span>');
+    }
+    
+    const isOwned = currentList.role === 'owner';
+    if (isOwned) {
+        if (currentList.is_shared) {
+            badges.push('<span class="list-badge shared">Shared</span>');
+        } else {
+            badges.push('<span class="list-badge private">Private</span>');
+        }
+    } else {
+        badges.push(`<span class="list-badge shared">${currentList.role}</span>`);
+    }
+    
+    currentListBadges.innerHTML = badges.join('');
+    
+    // Enable/disable action buttons based on permissions
+    const hasSelection = !!currentListId;
+    const canManage = canManageList();
+    
+    renameBtn.disabled = !canManage;
+    deleteBtn.disabled = !canManage || userShoppingLists.length <= 1;
+    defaultBtn.disabled = !canManage;
+    sharingBtn.disabled = !canShareList();
     
     // Update default button appearance
-    const currentList = userShoppingLists && userShoppingLists.find(list => list.id === currentListId);
     const isCurrentDefault = currentList && currentList.is_default;
     
     if (hasSelection && isCurrentDefault) {
@@ -378,25 +584,11 @@ function populateListSelector() {
         defaultBtn.title = 'Set as default';
         defaultBtn.style.color = ''; // Reset color
     }
-    
-    console.log('List selector updated:', { 
-        hasSelection, 
-        currentListId, 
-        currentList,
-        isCurrentDefault,
-        listsCount: userShoppingLists ? userShoppingLists.length : 0,
-        renameDisabled: renameBtn.disabled,
-        deleteDisabled: deleteBtn.disabled,
-        defaultDisabled: defaultBtn.disabled,
-        hasCurrentListId: !!currentListId,
-        hasUserShoppingLists: !!userShoppingLists,
-        userShoppingListsLength: userShoppingLists ? userShoppingLists.length : 'null/undefined'
-    });
 }
 
 async function switchShoppingList() {
     const selector = document.getElementById('listSelector');
-    const newListId = parseInt(selector.value);
+    const newListId = selector ? parseInt(selector.value) : currentListId;
     
     if (newListId && newListId !== currentListId) {
         currentListId = newListId;
@@ -458,7 +650,7 @@ async function switchShoppingList() {
             console.log('Updating display...');
             updateDisplay();
             updateStats();
-            populateListSelector(); // Update button states
+            populateListSelector(); // Update list selection and button states
             
             console.log('Successfully switched to list:', list.name);
             
@@ -1415,6 +1607,336 @@ function updateUIBasedOnPermissions() {
             deleteBtn.title = 'Delete list';
             defaultBtn.title = 'Set as default';
         }
+    }
+}
+
+// Sharing management functions
+function showSharingModal() {
+    if (!currentListId) {
+        alert('No shopping list selected');
+        return;
+    }
+    
+    // Check permissions
+    if (!canShareList()) {
+        alert('You do not have permission to manage sharing for this list');
+        return;
+    }
+    
+    // Pause polling while modal is open
+    pausePolling();
+    
+    // Create modal HTML for sharing management
+    const modalHtml = `
+        <div class="auth-overlay" id="sharingModalOverlay" style="display: flex;">
+            <div class="auth-modal sharing-modal">
+                <div class="auth-header">
+                    <h2 class="auth-title">Manage Sharing</h2>
+                    <p class="auth-subtitle">Control who has access to this shopping list</p>
+                </div>
+                
+                <div class="sharing-tabs">
+                    <button class="sharing-tab active" data-tab="users">Shared Users</button>
+                    <button class="sharing-tab" data-tab="invite">Invite User</button>
+                </div>
+                
+                <div class="auth-error" id="sharingError" style="display: none;"></div>
+                <div class="auth-success" id="sharingSuccess" style="display: none;"></div>
+                
+                <!-- Shared Users Tab -->
+                <div class="sharing-tab-content" id="usersTab">
+                    <div class="shared-users-list" id="sharedUsersList">
+                        <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+                            Loading...
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Invite User Tab -->
+                <div class="sharing-tab-content" id="inviteTab" style="display: none;">
+                    <form id="sharingInviteForm">
+                        <div class="form-group">
+                            <label class="form-label" for="sharingInviteUsername">Username:</label>
+                            <input type="text" class="form-input" id="sharingInviteUsername" placeholder="Enter username..." required autocomplete="off">
+                            <div id="sharingUserSearchResults" style="display: none; margin-top: 0.5rem;"></div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="sharingInvitePermission">Permission Level:</label>
+                            <select class="form-input form-select" id="sharingInvitePermission" required>
+                                <option value="read">Read Only (can view and check items)</option>
+                                <option value="write">Read & Write (can add, edit, delete items)</option>
+                            </select>
+                        </div>
+                        <button type="submit" class="auth-btn primary" style="width: 100%;">Send Invitation</button>
+                    </form>
+                </div>
+                
+                <div class="auth-actions" style="margin-top: 1.5rem;">
+                    <button type="button" class="auth-btn secondary" onclick="hideSharingModal()">Close</button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Add modal to body
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    
+    // Set up tab switching
+    document.querySelectorAll('.sharing-tab').forEach(tab => {
+        tab.addEventListener('click', (e) => {
+            const tabName = e.target.dataset.tab;
+            switchSharingTab(tabName);
+        });
+    });
+    
+    // Set up form submission
+    document.getElementById('sharingInviteForm').addEventListener('submit', handleSharingInviteSubmit);
+    
+    // Set up username search
+    document.getElementById('sharingInviteUsername').addEventListener('input', searchUsersForSharing);
+    
+    // Load shared users
+    loadSharedUsers();
+}
+
+function switchSharingTab(tabName) {
+    // Update tab buttons
+    document.querySelectorAll('.sharing-tab').forEach(tab => {
+        tab.classList.toggle('active', tab.dataset.tab === tabName);
+    });
+    
+    // Update tab content
+    document.querySelectorAll('.sharing-tab-content').forEach(content => {
+        content.style.display = content.id === `${tabName}Tab` ? 'block' : 'none';
+    });
+}
+
+function hideSharingModal() {
+    const modal = document.getElementById('sharingModalOverlay');
+    if (modal) {
+        modal.remove();
+    }
+    
+    // Resume polling when modal closes
+    setTimeout(() => {
+        resumePolling();
+    }, 500);
+}
+
+async function loadSharedUsers() {
+    try {
+        const response = await apiRequest(`/lists/${currentListId}/shares`);
+        const shares = response.shares || [];
+        
+        const sharedUsersList = document.getElementById('sharedUsersList');
+        
+        if (shares.length === 0) {
+            sharedUsersList.innerHTML = `
+                <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" style="opacity: 0.5; margin-bottom: 1rem;">
+                        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+                        <circle cx="9" cy="7" r="4"/>
+                        <path d="M22 21v-2a4 4 0 0 0-3-3.87"/>
+                        <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                    </svg>
+                    <p>This list isn't shared with anyone yet</p>
+                    <p style="font-size: 0.875rem; margin-top: 0.5rem;">Use the "Invite User" tab to share it</p>
+                </div>
+            `;
+            return;
+        }
+        
+        sharedUsersList.innerHTML = shares.map(share => `
+            <div class="shared-user-item" data-share-id="${share.id}">
+                <div class="shared-user-info">
+                    <div class="shared-user-name">${share.username}</div>
+                    <div class="shared-user-meta">
+                        <span class="shared-user-permission ${share.permission}">${share.permission}</span>
+                        <span class="shared-user-status ${share.status}">${share.status}</span>
+                        <span class="shared-user-date">${formatSharingDate(share.shared_at)}</span>
+                    </div>
+                </div>
+                <div class="shared-user-actions">
+                    <select class="permission-select" data-share-id="${share.id}" data-current="${share.permission}">
+                        <option value="read" ${share.permission === 'read' ? 'selected' : ''}>Read</option>
+                        <option value="write" ${share.permission === 'write' ? 'selected' : ''}>Write</option>
+                    </select>
+                    <button class="remove-user-btn" onclick="removeUserFromSharing(${share.id})" title="Remove user">×</button>
+                </div>
+            </div>
+        `).join('');
+        
+        // Add event listeners for permission changes
+        document.querySelectorAll('.permission-select').forEach(select => {
+            select.addEventListener('change', handlePermissionChange);
+        });
+        
+    } catch (error) {
+        console.error('Failed to load shared users:', error);
+        document.getElementById('sharedUsersList').innerHTML = `
+            <div style="text-align: center; padding: 2rem; color: var(--danger);">
+                Failed to load shared users. Please try again.
+            </div>
+        `;
+    }
+}
+
+function formatSharingDate(timestamp) {
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diffDays = Math.floor((now - date) / (1000 * 60 * 60 * 24));
+    
+    if (diffDays === 0) return 'Today';
+    if (diffDays === 1) return 'Yesterday';
+    if (diffDays < 7) return `${diffDays} days ago`;
+    
+    return date.toLocaleDateString();
+}
+
+async function handlePermissionChange(event) {
+    const shareId = parseInt(event.target.dataset.shareId);
+    const newPermission = event.target.value;
+    const currentPermission = event.target.dataset.current;
+    
+    if (newPermission === currentPermission) return;
+    
+    try {
+        await apiRequest(`/lists/${currentListId}/shares/${shareId}`, {
+            method: 'PUT',
+            body: JSON.stringify({ permission: newPermission })
+        });
+        
+        event.target.dataset.current = newPermission;
+        showSharingSuccess(`Permission updated to ${newPermission}`);
+        
+    } catch (error) {
+        console.error('Failed to update permission:', error);
+        // Revert the select value
+        event.target.value = currentPermission;
+        showSharingError(`Failed to update permission: ${error.message}`);
+    }
+}
+
+async function removeUserFromSharing(shareId) {
+    if (!confirm('Are you sure you want to remove this user from the list?')) {
+        return;
+    }
+    
+    try {
+        await apiRequest(`/lists/${currentListId}/shares/${shareId}`, {
+            method: 'DELETE'
+        });
+        
+        // Remove from UI
+        const userItem = document.querySelector(`[data-share-id="${shareId}"]`);
+        if (userItem) {
+            userItem.remove();
+        }
+        
+        // Check if list is now empty
+        const remainingUsers = document.querySelectorAll('.shared-user-item');
+        if (remainingUsers.length === 0) {
+            loadSharedUsers(); // Reload to show empty state
+        }
+        
+        showSharingSuccess('User removed from list');
+        
+    } catch (error) {
+        console.error('Failed to remove user:', error);
+        showSharingError(`Failed to remove user: ${error.message}`);
+    }
+}
+
+function showSharingError(message) {
+    const errorEl = document.getElementById('sharingError');
+    if (errorEl) {
+        errorEl.textContent = message;
+        errorEl.style.display = 'block';
+        setTimeout(() => errorEl.style.display = 'none', 5000);
+    }
+}
+
+function showSharingSuccess(message) {
+    const successEl = document.getElementById('sharingSuccess');
+    if (successEl) {
+        successEl.textContent = message;
+        successEl.style.display = 'block';
+        setTimeout(() => successEl.style.display = 'none', 3000);
+    }
+}
+
+async function searchUsersForSharing(event) {
+    const query = event.target.value.trim();
+    const resultsDiv = document.getElementById('sharingUserSearchResults');
+    
+    if (query.length < 2) {
+        resultsDiv.style.display = 'none';
+        return;
+    }
+    
+    try {
+        const response = await apiRequest(`/users/search?q=${encodeURIComponent(query)}`);
+        const users = response.users;
+        
+        if (users.length === 0) {
+            resultsDiv.innerHTML = '<div style="padding: 0.5rem; color: var(--text-secondary); font-size: 0.875rem;">No users found</div>';
+            resultsDiv.style.display = 'block';
+            return;
+        }
+        
+        resultsDiv.innerHTML = users.map(user => `
+            <div class="user-search-result" onclick="selectUserForSharing('${user.username}')" 
+                 style="padding: 0.5rem; cursor: pointer; border-bottom: 1px solid var(--border-light); font-size: 0.875rem;">
+                <strong>${user.username}</strong>
+                <div style="color: var(--text-secondary); font-size: 0.75rem;">${user.email}</div>
+            </div>
+        `).join('');
+        
+        resultsDiv.style.display = 'block';
+        
+    } catch (error) {
+        console.error('Failed to search users:', error);
+    }
+}
+
+function selectUserForSharing(username) {
+    document.getElementById('sharingInviteUsername').value = username;
+    document.getElementById('sharingUserSearchResults').style.display = 'none';
+}
+
+async function handleSharingInviteSubmit(event) {
+    event.preventDefault();
+    
+    const username = document.getElementById('sharingInviteUsername').value.trim();
+    const permission = document.getElementById('sharingInvitePermission').value;
+    
+    if (!username) {
+        showSharingError('Please enter a username');
+        return;
+    }
+    
+    try {
+        const response = await apiRequest(`/lists/${currentListId}/invite`, {
+            method: 'POST',
+            body: JSON.stringify({
+                username: username,
+                permission: permission
+            })
+        });
+        
+        showSharingSuccess(`Invitation sent to ${username}`);
+        
+        // Clear form
+        document.getElementById('sharingInviteForm').reset();
+        document.getElementById('sharingUserSearchResults').style.display = 'none';
+        
+        // Switch back to users tab and reload
+        switchSharingTab('users');
+        setTimeout(() => loadSharedUsers(), 1000);
+        
+    } catch (error) {
+        console.error('Failed to send invitation:', error);
+        showSharingError(`Failed to send invitation: ${error.message}`);
     }
 }
 

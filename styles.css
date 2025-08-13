@@ -684,6 +684,164 @@ body {
     border-bottom: 1px solid var(--border-light);
 }
 
+.list-category {
+    margin-bottom: 1.5rem;
+}
+
+.list-category-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.75rem;
+    padding: 0.5rem 0;
+}
+
+.list-category-title {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.025em;
+}
+
+.list-category-count {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    background: var(--border-light);
+    padding: 0.25rem 0.5rem;
+    border-radius: 12px;
+    min-width: 20px;
+    text-align: center;
+}
+
+.list-items {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.list-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    position: relative;
+}
+
+.list-item:hover {
+    background: var(--border-light);
+    border-color: var(--primary-color);
+    transform: translateY(-1px);
+}
+
+.list-item.active {
+    background: var(--primary-color);
+    color: white;
+    border-color: var(--primary-color);
+    box-shadow: 0 2px 8px rgba(26, 35, 50, 0.15);
+}
+
+.list-item-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.list-item-name {
+    font-weight: 500;
+    color: var(--text-primary);
+    font-size: 0.875rem;
+}
+
+.list-item.active .list-item-name {
+    color: white;
+}
+
+.list-item-meta {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.list-item.active .list-item-meta {
+    color: rgba(255, 255, 255, 0.8);
+}
+
+.list-item-badges {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    flex-shrink: 0;
+}
+
+.list-badge {
+    font-size: 0.65rem;
+    font-weight: 600;
+    padding: 0.25rem 0.5rem;
+    border-radius: 10px;
+    line-height: 1;
+    text-transform: uppercase;
+    letter-spacing: 0.025em;
+}
+
+.list-badge.default {
+    background: #ffd700;
+    color: #000;
+}
+
+.list-badge.shared {
+    background: rgba(34, 197, 94, 0.1);
+    color: var(--success);
+}
+
+.list-badge.private {
+    background: rgba(123, 135, 148, 0.1);
+    color: var(--text-secondary);
+}
+
+.list-item.active .list-badge.shared {
+    background: rgba(255, 255, 255, 0.2);
+    color: white;
+}
+
+.list-item.active .list-badge.private {
+    background: rgba(255, 255, 255, 0.2);
+    color: white;
+}
+
+.current-list-actions {
+    margin-top: 1.5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border-light);
+}
+
+.current-list-info {
+    margin-bottom: 1rem;
+}
+
+.current-list-name {
+    font-weight: 600;
+    color: var(--text-primary);
+    font-size: 0.875rem;
+    display: block;
+    margin-bottom: 0.5rem;
+}
+
+.current-list-badges {
+    display: flex;
+    gap: 0.25rem;
+    flex-wrap: wrap;
+}
+
 .list-selector-header {
     display: flex;
     align-items: center;
@@ -1251,6 +1409,167 @@ body {
 
 .user-search-result:hover {
     background: var(--border-light) !important;
+}
+
+/* Sharing Modal Styles */
+.sharing-modal {
+    max-width: 500px !important;
+    width: 95% !important;
+}
+
+.sharing-tabs {
+    display: flex;
+    margin-bottom: 1.5rem;
+    border-bottom: 1px solid var(--border-light);
+}
+
+.sharing-tab {
+    background: none;
+    border: none;
+    padding: 0.75rem 1rem;
+    cursor: pointer;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s ease;
+}
+
+.sharing-tab.active {
+    color: var(--primary-color);
+    border-bottom-color: var(--primary-color);
+}
+
+.sharing-tab:hover {
+    color: var(--text-primary);
+}
+
+.sharing-tab-content {
+    min-height: 200px;
+}
+
+.shared-users-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.shared-user-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    transition: all 0.2s ease;
+}
+
+.shared-user-item:hover {
+    border-color: var(--primary-color);
+    transform: translateY(-1px);
+}
+
+.shared-user-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.shared-user-name {
+    font-weight: 600;
+    color: var(--text-primary);
+    font-size: 0.875rem;
+}
+
+.shared-user-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-size: 0.75rem;
+}
+
+.shared-user-permission {
+    padding: 0.25rem 0.5rem;
+    border-radius: 12px;
+    font-weight: 500;
+    text-transform: capitalize;
+}
+
+.shared-user-permission.read {
+    background: rgba(123, 135, 148, 0.1);
+    color: var(--text-secondary);
+}
+
+.shared-user-permission.write {
+    background: rgba(34, 197, 94, 0.1);
+    color: var(--success);
+}
+
+.shared-user-status {
+    padding: 0.25rem 0.5rem;
+    border-radius: 12px;
+    font-weight: 500;
+    text-transform: capitalize;
+}
+
+.shared-user-status.accepted {
+    background: rgba(34, 197, 94, 0.1);
+    color: var(--success);
+}
+
+.shared-user-status.pending {
+    background: rgba(251, 191, 36, 0.1);
+    color: var(--warning);
+}
+
+.shared-user-date {
+    color: var(--text-secondary);
+}
+
+.shared-user-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.permission-select {
+    padding: 0.375rem 0.5rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--surface);
+    color: var(--text-primary);
+    font-size: 0.75rem;
+    cursor: pointer;
+    min-width: 80px;
+}
+
+.permission-select:focus {
+    outline: none;
+    border-color: var(--primary-color);
+}
+
+.remove-user-btn {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 0.25rem;
+    border-radius: 4px;
+    font-size: 1.125rem;
+    line-height: 1;
+    transition: all 0.2s ease;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.remove-user-btn:hover {
+    background: var(--danger);
+    color: white;
 }
 
 
