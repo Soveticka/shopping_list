@@ -71,12 +71,10 @@ async function apiRequest(endpoint, options = {}) {
 }
 
 function showAuthModal() {
-    console.log('Showing auth modal...');
     document.getElementById('authOverlay').style.display = 'flex';
 }
 
 function hideAuthModal() {
-    console.log('Hiding auth modal...');
     document.getElementById('authOverlay').style.display = 'none';
     clearAuthError();
     clearAuthSuccess();
@@ -122,11 +120,11 @@ function switchToRegister() {
     clearAuthSuccess();
 }
 
-async function login(email, password) {
+async function login(login, password) {
     try {
         const response = await apiRequest('/auth/login', {
             method: 'POST',
-            body: JSON.stringify({ email, password })
+            body: JSON.stringify({ login, password })
         });
 
         authToken = response.token;
@@ -234,7 +232,6 @@ async function loadGroceryMemory() {
 }
 
 async function loadUserShoppingLists() {
-    console.log('Loading shopping lists...');
     const listsResponse = await apiRequest('/lists');
     userShoppingLists = listsResponse.lists;
     return userShoppingLists;
@@ -244,10 +241,8 @@ async function loadShoppingList() {
     try {
         await loadUserShoppingLists();
         
-        console.log('User lists:', userShoppingLists);
         
         if (!userShoppingLists || userShoppingLists.length === 0) {
-            console.log('No lists found, creating default list...');
             // Create default list
             const newListResponse = await apiRequest('/lists', {
                 method: 'POST',
@@ -256,16 +251,13 @@ async function loadShoppingList() {
             userShoppingLists.push(newListResponse.list);
             currentListId = newListResponse.list.id;
             populateListSelector();
-            console.log('Created new list with ID:', currentListId);
         } else {
             // Set current list: use default if available, otherwise first one
             if (!currentListId) {
                 if (userDefaultListId && userShoppingLists.find(list => list.id === userDefaultListId)) {
                     currentListId = userDefaultListId;
-                    console.log('Using default list with ID:', currentListId);
                 } else {
                     currentListId = userShoppingLists[0].id;
-                    console.log('Using first list with ID:', currentListId);
                 }
             }
         }
@@ -279,14 +271,12 @@ async function loadShoppingList() {
         }
         
         // Load list items
-        console.log('Loading items for list:', currentListId);
         const listResponse = await apiRequest(`/lists/${currentListId}`);
         const list = listResponse.list;
         
         // Store permission information
         currentListPermission = list.user_permission || 'read';
         currentListIsOwner = list.is_owner || false;
-        console.log('Current list permissions:', { permission: currentListPermission, isOwner: currentListIsOwner });
         
         // Initialize last update timestamp
         lastListUpdate = new Date(list.updated_at).getTime();
@@ -294,7 +284,6 @@ async function loadShoppingList() {
         // Update UI based on permissions
         updateUIBasedOnPermissions();
         
-        console.log('Loaded list:', list);
         
         // Clear existing items
         Object.keys(categories).forEach(cat => {
@@ -303,7 +292,6 @@ async function loadShoppingList() {
         
         // Populate items from database
         if (list.items && list.items.length > 0) {
-            console.log('Populating', list.items.length, 'items');
             list.items.forEach(item => {
                 if (categories[item.category]) {
                     categories[item.category].items.push({
@@ -317,13 +305,11 @@ async function loadShoppingList() {
                 }
             });
         } else {
-            console.log('No items found in list');
         }
         
         renderCategories();
         updateStats();
         
-        console.log('Shopping list loaded successfully, currentListId:', currentListId);
         
     } catch (error) {
         console.error('Failed to load shopping list:', error);
@@ -522,7 +508,6 @@ function selectHeaderList(listId) {
         return;
     }
     
-    console.log('Selecting header list:', listId);
     
     // Update currentListId directly and call switch
     currentListId = listId;
@@ -543,7 +528,6 @@ function selectHeaderList(listId) {
 function selectList(listId) {
     if (listId === currentListId) return;
     
-    console.log('Selecting list:', listId);
     
     // Update currentListId directly and call switch
     currentListId = listId;
@@ -678,7 +662,6 @@ function toggleMemorySection() {
 }
 
 async function switchToList(listId) {
-    console.log('Switching to list:', listId);
     
     try {
         // Load the new list's items
@@ -688,7 +671,6 @@ async function switchToList(listId) {
         // Store permission information
         currentListPermission = list.user_permission || 'read';
         currentListIsOwner = list.is_owner || false;
-        console.log('Updated list permissions:', { permission: currentListPermission, isOwner: currentListIsOwner });
         
         // Update last update timestamp for new list
         lastListUpdate = new Date(list.updated_at).getTime();
@@ -696,7 +678,6 @@ async function switchToList(listId) {
         // Update UI based on permissions
         updateUIBasedOnPermissions();
         
-        console.log('Processing list:', list.name, 'with', list.items ? list.items.length : 0, 'items');
         
         // Clear existing items
         Object.keys(categories).forEach(cat => {
@@ -705,7 +686,6 @@ async function switchToList(listId) {
         
         // Populate items from database
         if (list.items && list.items.length > 0) {
-            console.log('Adding items to categories...');
             list.items.forEach(item => {
                 if (categories[item.category]) {
                     categories[item.category].items.push({
@@ -725,7 +705,6 @@ async function switchToList(listId) {
         updateStats();
         populateListSelector(); // Update list selection and button states
         
-        console.log('Successfully switched to list:', list.name);
         
     } catch (error) {
         console.error('Failed to switch to list:', error);
@@ -805,13 +784,10 @@ async function switchShoppingList() {
     
     if (newListId && newListId !== currentListId) {
         currentListId = newListId;
-        console.log('Switching to list:', currentListId);
         
         try {
-            console.log('Making API request to load list:', currentListId);
             // Load the new list's items
             const listResponse = await apiRequest(`/lists/${currentListId}`);
-            console.log('List response received:', listResponse);
             
             if (!listResponse || !listResponse.list) {
                 throw new Error('Invalid response from server: ' + JSON.stringify(listResponse));
@@ -822,7 +798,6 @@ async function switchShoppingList() {
             // Store permission information
             currentListPermission = list.user_permission || 'read';
             currentListIsOwner = list.is_owner || false;
-            console.log('Updated list permissions:', { permission: currentListPermission, isOwner: currentListIsOwner });
             
             // Update last update timestamp for new list
             lastListUpdate = new Date(list.updated_at).getTime();
@@ -830,7 +805,6 @@ async function switchShoppingList() {
             // Update UI based on permissions
             updateUIBasedOnPermissions();
             
-            console.log('Processing list:', list.name, 'with', list.items ? list.items.length : 0, 'items');
             
             // Clear existing items
             Object.keys(categories).forEach(cat => {
@@ -839,9 +813,7 @@ async function switchShoppingList() {
             
             // Populate items from database
             if (list.items && list.items.length > 0) {
-                console.log('Adding items to categories...');
                 list.items.forEach(item => {
-                    console.log('Processing item:', item.name, 'category:', item.category);
                     if (categories[item.category]) {
                         categories[item.category].items.push({
                             id: item.id,
@@ -856,16 +828,13 @@ async function switchShoppingList() {
                     }
                 });
             } else {
-                console.log('No items to add for this list');
             }
             
             // Update UI
-            console.log('Updating display...');
             updateDisplay();
             updateStats();
             populateListSelector(); // Update list selection and button states
             
-            console.log('Successfully switched to list:', list.name);
             
         } catch (error) {
             console.error('Failed to switch shopping list:', error);
@@ -975,14 +944,12 @@ function initializeListFormHandling() {
             
             try {
                 if (isEditingList && editingListId) {
-                    console.log('Updating list:', editingListId, 'with name:', listName);
                     // Update existing list
                     const response = await apiRequest(`/lists/${editingListId}`, {
                         method: 'PUT',
                         body: JSON.stringify({ name: listName })
                     });
                     
-                    console.log('Update response:', response);
                     
                     if (!response || !response.list) {
                         throw new Error('Invalid response when updating list: ' + JSON.stringify(response));
@@ -992,22 +959,18 @@ function initializeListFormHandling() {
                     const listIndex = userShoppingLists.findIndex(list => list.id === editingListId);
                     if (listIndex !== -1) {
                         userShoppingLists[listIndex] = response.list;
-                        console.log('Updated local list array');
                     }
                     
                     populateListSelector();
                     hideListModal();
-                    console.log('Successfully updated list:', response.list.name);
                     
                 } else {
-                    console.log('Creating new list with name:', listName);
                     // Create new list
                     const response = await apiRequest('/lists', {
                         method: 'POST',
                         body: JSON.stringify({ name: listName })
                     });
                     
-                    console.log('Create response:', response);
                     
                     if (!response || !response.list) {
                         throw new Error('Invalid response when creating list: ' + JSON.stringify(response));
@@ -1015,11 +978,9 @@ function initializeListFormHandling() {
                     
                     // Add to local array
                     userShoppingLists.push(response.list);
-                    console.log('Added to local list array, total lists:', userShoppingLists.length);
                     
                     // Switch to new list
                     currentListId = response.list.id;
-                    console.log('Switched to new list ID:', currentListId);
                     
                     // Clear current items and update UI
                     Object.keys(categories).forEach(cat => {
@@ -1031,7 +992,6 @@ function initializeListFormHandling() {
                     populateListSelector();
                     hideListModal();
                     
-                    console.log('Successfully created list:', response.list.name);
                 }
                 
             } catch (error) {
@@ -1088,7 +1048,6 @@ async function toggleDefaultList() {
             `"${currentList.name}" is now your default shopping list` : 
             `"${currentList.name}" is no longer your default shopping list`;
         
-        console.log(message);
         
     } catch (error) {
         console.error('Failed to toggle default list:', error);
@@ -1105,16 +1064,13 @@ async function initializeApp(skipModalOnError = false) {
     }
 
     try {
-        console.log('Initializing app with token:', authToken ? 'present' : 'missing');
         
         // Verify token and get user info
         const response = await apiRequest('/auth/me');
         currentUser = response.user;
         
-        console.log('User verified:', currentUser);
         
         // Load user data
-        console.log('Loading user data...');
         try {
             await loadGroceryMemory();
         } catch (error) {
@@ -1122,7 +1078,6 @@ async function initializeApp(skipModalOnError = false) {
         }
         
         // Load default list preference
-        console.log('Loading default list preference...');
         await loadDefaultList();
         
         try {
@@ -1131,26 +1086,22 @@ async function initializeApp(skipModalOnError = false) {
             console.error('Failed to load shopping list:', error);
             // Try to create a new list if loading failed
             try {
-                console.log('Attempting to create emergency list...');
                 const newListResponse = await apiRequest('/lists', {
                     method: 'POST',
                     body: JSON.stringify({ name: 'My Shopping List' })
                 });
                 currentListId = newListResponse.list.id;
-                console.log('Created emergency list with ID:', currentListId);
             } catch (createError) {
                 console.error('Failed to create emergency list:', createError);
                 currentListId = null;
             }
         }
         
-        console.log('After loading, currentListId:', currentListId);
         
         // Initialize list form handling
         initializeListFormHandling();
         
         // Load notifications
-        console.log('Loading notifications...');
         try {
             await loadNotifications();
         } catch (error) {
@@ -1160,7 +1111,6 @@ async function initializeApp(skipModalOnError = false) {
         // Start auto-update polling
         startAutoUpdate();
         
-        console.log('App initialized successfully');
         
     } catch (error) {
         console.error('Failed to initialize app:', error);
@@ -1317,9 +1267,6 @@ async function addItem(event) {
         return;
     }
     
-    console.log('Adding item, currentListId:', currentListId);
-    console.log('authToken:', authToken ? 'present' : 'missing');
-    console.log('currentUser:', currentUser);
     
     if (!currentListId) {
         console.error('No currentListId available');
@@ -1334,7 +1281,6 @@ async function addItem(event) {
     const notes = document.getElementById('itemNotes').value.trim();
     const category = document.getElementById('itemCategory').value;
 
-    console.log('Item data:', { name, quantity, priority, notes, category });
 
     if (!name) {
         alert('Please enter an item name');
@@ -1342,7 +1288,6 @@ async function addItem(event) {
     }
 
     try {
-        console.log('Making API request to add item...');
         const response = await apiRequest(`/lists/${currentListId}/items`, {
             method: 'POST',
             body: JSON.stringify({
@@ -1354,7 +1299,6 @@ async function addItem(event) {
             })
         });
 
-        console.log('API response:', response);
         const newItem = response.item;
         
         // Add to local state
@@ -1367,7 +1311,6 @@ async function addItem(event) {
             completed: newItem.completed
         });
         
-        console.log('Item added to local state');
         
         // Clear form
         document.getElementById('itemName').value = '';
@@ -1384,7 +1327,6 @@ async function addItem(event) {
         // Refresh memory
         await loadGroceryMemory();
         
-        console.log('Item added successfully');
         
     } catch (error) {
         console.error('Failed to add item:', error);
@@ -1463,7 +1405,6 @@ async function updateQuantity(categoryId, itemId, delta) {
         renderCategories();
         updateStats();
         
-        console.log(`Updated item ${item.name} quantity to ${newQuantity}`);
         
     } catch (error) {
         console.error('Failed to update item quantity:', error);
@@ -1795,7 +1736,6 @@ function canManageList() {
 }
 
 function updateUIBasedOnPermissions() {
-    console.log('Updating UI based on permissions:', { permission: currentListPermission, isOwner: currentListIsOwner });
     
     // Add item form
     const addForm = document.querySelector('.add-form');
@@ -2357,7 +2297,6 @@ async function handleInviteSubmit(event) {
 
 // Header notification bell functions
 window.toggleNotifications = function() {
-    console.log('toggleNotifications called');
     const dropdown = document.getElementById('notificationDropdown');
     const isVisible = dropdown.style.display === 'block';
     
@@ -2525,8 +2464,6 @@ async function respondToInvitation(notificationId, response) {
 
 // Make sure functions are globally available
 window.dismissNotification = async function(notificationId) {
-    console.log('dismissNotification called with ID:', notificationId);
-    console.log('Current authToken:', authToken ? 'present' : 'missing');
     try {
         // Find and animate the notification item
         const notificationItem = document.querySelector(`[data-notification-id="${notificationId}"]`);
@@ -2536,16 +2473,12 @@ window.dismissNotification = async function(notificationId) {
         }
         
         // Mark notification as read (dismiss it)
-        console.log('Making API request to mark notification as read:', `/notifications/${notificationId}/read`);
         const response = await apiRequest(`/notifications/${notificationId}/read`, {
             method: 'PUT'
         });
-        console.log('API response:', response);
         
         // Reload notifications to update UI
-        console.log('Reloading notifications...');
         await loadNotifications();
-        console.log('Notifications reloaded');
         
     } catch (error) {
         console.error('Failed to dismiss notification:', error);
@@ -2562,7 +2495,6 @@ window.dismissNotification = async function(notificationId) {
 }
 
 window.markAllNotificationsRead = async function() {
-    console.log('markAllNotificationsRead called');
     try {
         const response = await apiRequest('/notifications');
         const notifications = response.notifications;
@@ -2610,7 +2542,6 @@ window.markAllNotificationsRead = async function() {
 
 // Auto-update system
 function startAutoUpdate() {
-    console.log('Starting auto-update polling...');
     if (pollingIntervalId) {
         clearInterval(pollingIntervalId);
     }
@@ -2619,12 +2550,10 @@ function startAutoUpdate() {
     
     pollingIntervalId = setInterval(async () => {
         if (!authToken || !currentUser) {
-            console.log('No auth token or user, skipping polling');
             return;
         }
         
         if (pollingPaused) {
-            console.log('Polling paused, skipping update check');
             return;
         }
         
@@ -2657,7 +2586,6 @@ function startAutoUpdate() {
 }
 
 function stopAutoUpdate() {
-    console.log('Stopping auto-update polling...');
     if (pollingIntervalId) {
         clearInterval(pollingIntervalId);
         pollingIntervalId = null;
@@ -2666,13 +2594,11 @@ function stopAutoUpdate() {
 }
 
 function pausePolling() {
-    console.log('Pausing auto-update polling...');
     pollingPaused = true;
     updateConnectionStatus('paused');
 }
 
 function resumePolling() {
-    console.log('Resuming auto-update polling...');
     pollingPaused = false;
     updateConnectionStatus('online');
 }
@@ -2726,7 +2652,6 @@ async function checkNotificationUpdates() {
         }
         
         if (latestNotificationTime > lastNotificationUpdate) {
-            console.log('New notifications detected, updating...');
             renderNotifications(notifications);
             updateNotificationCount(notifications);
             lastNotificationUpdate = latestNotificationTime;
@@ -2749,17 +2674,10 @@ async function checkListUpdates() {
         if (lastListUpdate === null) {
             // First time - just store the timestamp
             lastListUpdate = latestUpdateTime;
-            console.log('Initial list timestamp:', new Date(latestUpdateTime).toISOString());
             return;
         }
         
-        console.log('Comparing timestamps:');
-        console.log('  Last known:', new Date(lastListUpdate).toISOString());
-        console.log('  Server now:', new Date(latestUpdateTime).toISOString());
-        console.log('  Difference:', latestUpdateTime - lastListUpdate, 'ms');
-        
         if (latestUpdateTime > lastListUpdate) {
-            console.log('List updates detected, refreshing...');
             
             // Update local data
             Object.keys(categories).forEach(cat => {
@@ -2784,8 +2702,6 @@ async function checkListUpdates() {
             renderCategories();
             updateStats();
             lastListUpdate = latestUpdateTime;
-        } else {
-            console.log('No updates detected');
         }
     } catch (error) {
         console.error('Failed to check list updates:', error);
@@ -3193,7 +3109,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Authentication form event listeners
     document.getElementById('loginForm').addEventListener('submit', async (e) => {
         e.preventDefault();
-        const email = document.getElementById('loginEmail').value;
+        const loginValue = document.getElementById('loginEmail').value;
         const password = document.getElementById('loginPassword').value;
         
         const submitBtn = document.getElementById('loginSubmit');
@@ -3201,7 +3117,7 @@ document.addEventListener('DOMContentLoaded', function() {
         submitBtn.classList.add('loading-state');
         submitBtn.textContent = 'Signing in...';
         
-        await login(email, password);
+        await login(loginValue, password);
         
         submitBtn.disabled = false;
         submitBtn.classList.remove('loading-state');

@@ -54,7 +54,7 @@ class UserRegistrationSchema(Schema):
     password = fields.Str(required=True, validate=lambda x: len(x) >= 6)
 
 class UserLoginSchema(Schema):
-    email = fields.Email(required=True)
+    login = fields.Str(required=True)  # Can be email or username
     password = fields.Str(required=True)
 
 class ShoppingListItemSchema(Schema):
@@ -126,14 +126,12 @@ def register():
                 user = cur.fetchone()
                 
                 # Create default shopping list
-                print(f"Creating shopping list for user {user['id']}")
                 cur.execute(
                     "INSERT INTO shopping_lists (name, owner_id) VALUES (%s, %s) RETURNING id",
                     ('My Shopping List', user['id'])
                 )
                 list_result = cur.fetchone()
                 list_id = list_result['id']
-                print(f"Created shopping list with ID: {list_id}")
                 
                 # Add sample items to the list
                 sample_items = [
@@ -145,7 +143,6 @@ def register():
                 ]
                 
                 for item_name, quantity, category, priority, notes in sample_items:
-                    print(f"Adding sample item: {item_name}")
                     # Add to shopping list
                     cur.execute("""
                         INSERT INTO shopping_list_items (list_id, name, quantity, category, priority, notes)
@@ -164,7 +161,6 @@ def register():
                             last_used = CURRENT_TIMESTAMP
                     """, (user['id'], item_name, category, priority))
                 
-                print(f"Added {len(sample_items)} sample items to list {list_id}")
                 
                 conn.commit()
                 
@@ -194,19 +190,29 @@ def login():
         schema = UserLoginSchema()
         data = schema.load(request.json)
         
-        email = data['email']
+        login = data['login']
         password = data['password']
+        
+        # Determine if login is email or username
+        is_email = '@' in login
         
         with get_db_connection() as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
-                cur.execute(
-                    "SELECT id, username, email, password_hash FROM users WHERE email = %s",
-                    (email,)
-                )
+                if is_email:
+                    cur.execute(
+                        "SELECT id, username, email, password_hash FROM users WHERE email = %s",
+                        (login,)
+                    )
+                else:
+                    cur.execute(
+                        "SELECT id, username, email, password_hash FROM users WHERE username = %s",
+                        (login,)
+                    )
+                
                 user = cur.fetchone()
                 
                 if not user or not bcrypt.checkpw(password.encode('utf-8'), user['password_hash'].encode('utf-8')):
-                    return jsonify({'error': 'Invalid email or password'}), 401
+                    return jsonify({'error': 'Invalid login or password'}), 401
                 
                 # Create access token
                 access_token = create_access_token(identity=str(user['id']))
