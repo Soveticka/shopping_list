@@ -1,0 +1,92 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database (unchanged)
+  postgres:
+    image: postgres:15-alpine
+    container_name: shopping-list-db-v2
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: shopping_list
+      POSTGRES_USER: shopping_user
+      POSTGRES_PASSWORD: shopping_password
+    volumes:
+      - postgres-data-v2:/var/lib/postgresql/data
+      - ./backend/database/schema.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - shopping-list-network-v2
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U shopping_user -d shopping_list"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Go Backend API
+  backend-go:
+    build: 
+      context: ./backend-go
+      dockerfile: Dockerfile
+    container_name: shopping-list-backend-go
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=production
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=shopping_list
+      - DB_USER=shopping_user
+      - DB_PASSWORD=shopping_password
+      - JWT_SECRET=your-super-secret-jwt-key-change-this-in-production-please
+      - JWT_EXPIRES_IN=7d
+      - PORT=3001
+      - FRONTEND_URL=http://localhost:3000
+      # OIDC Configuration
+      - OIDC_CLIENT_ID=${OIDC_CLIENT_ID:-}
+      - OIDC_CLIENT_SECRET=${OIDC_CLIENT_SECRET:-}
+      - OIDC_DISCOVERY_URL=${OIDC_DISCOVERY_URL:-https://auth.mkomanek.eu/application/o/shopping-list/.well-known/openid_configuration}
+      - OIDC_REDIRECT_URI=${OIDC_REDIRECT_URI:-http://localhost:3000/auth/oidc/callback}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - shopping-list-network-v2
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3001/api/users/me"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # SvelteKit Frontend
+  frontend-svelte:
+    build: 
+      context: ./frontend-svelte
+      dockerfile: Dockerfile
+    container_name: shopping-list-frontend-svelte
+    ports:
+      - "3000:80"
+    restart: unless-stopped
+    environment:
+      - NGINX_HOST=localhost
+      - NGINX_PORT=80
+    volumes:
+      - nginx-logs-v2:/var/log/nginx
+    networks:
+      - shopping-list-network-v2
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  postgres-data-v2:
+    driver: local
+  nginx-logs-v2:
+    driver: local
+
+networks:
+  shopping-list-network-v2:
+    driver: bridge

@@ -1,0 +1,225 @@
+/* CSS Custom Properties - migrated from original styles.css */
+:root {
+	/* Light theme colors */
+	--primary: #2c5aa0;
+	--primary-hover: #1e3f73;
+	--background: #fafafa;
+	--surface: #ffffff;
+	--text-primary: #1a1a1a;
+	--text-secondary: #666666;
+	--text-muted: #999999;
+	--border: #e0e0e0;
+	--border-hover: #cccccc;
+	--success: #4caf50;
+	--warning: #ff9800;
+	--error: #f44336;
+	--info: #2196f3;
+	--shadow-light: rgba(0, 0, 0, 0.1);
+	--shadow-medium: rgba(0, 0, 0, 0.15);
+	--shadow-heavy: rgba(0, 0, 0, 0.2);
+}
+
+/* Dark theme */
+[data-theme='dark'] {
+	--primary: #4a90e2;
+	--primary-hover: #357abd;
+	--background: #121212;
+	--surface: #1e1e1e;
+	--text-primary: #ffffff;
+	--text-secondary: #b3b3b3;
+	--text-muted: #808080;
+	--border: #333333;
+	--border-hover: #444444;
+	--success: #66bb6a;
+	--warning: #ffb74d;
+	--error: #ef5350;
+	--info: #42a5f5;
+	--shadow-light: rgba(0, 0, 0, 0.3);
+	--shadow-medium: rgba(0, 0, 0, 0.4);
+	--shadow-heavy: rgba(0, 0, 0, 0.5);
+}
+
+/* Reset and base styles */
+* {
+	box-sizing: border-box;
+	margin: 0;
+	padding: 0;
+}
+
+body {
+	font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+	line-height: 1.6;
+	color: var(--text-primary);
+	background-color: var(--background);
+	transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Button styles */
+.btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 0.5rem;
+	padding: 0.75rem 1.5rem;
+	border: none;
+	border-radius: 8px;
+	font-size: 0.9rem;
+	font-weight: 500;
+	cursor: pointer;
+	transition: all 0.2s ease;
+	text-decoration: none;
+	user-select: none;
+}
+
+.btn:disabled {
+	opacity: 0.6;
+	cursor: not-allowed;
+}
+
+.btn-primary {
+	background: var(--primary);
+	color: white;
+}
+
+.btn-primary:hover:not(:disabled) {
+	background: var(--primary-hover);
+	transform: translateY(-1px);
+	box-shadow: 0 4px 12px var(--shadow-medium);
+}
+
+.btn-secondary {
+	background: var(--surface);
+	color: var(--text-primary);
+	border: 2px solid var(--border);
+}
+
+.btn-secondary:hover:not(:disabled) {
+	border-color: var(--border-hover);
+	transform: translateY(-1px);
+}
+
+/* Input styles */
+.input {
+	width: 100%;
+	padding: 0.75rem;
+	border: 2px solid var(--border);
+	border-radius: 8px;
+	font-size: 1rem;
+	background: var(--surface);
+	color: var(--text-primary);
+	transition: border-color 0.2s ease;
+}
+
+.input:focus {
+	outline: none;
+	border-color: var(--primary);
+}
+
+.input::placeholder {
+	color: var(--text-muted);
+}
+
+/* Form group */
+.form-group {
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+	margin-bottom: 1rem;
+}
+
+.form-label {
+	font-weight: 500;
+	color: var(--text-secondary);
+	font-size: 0.9rem;
+}
+
+/* Modal styles */
+.modal-overlay {
+	position: fixed;
+	top: 0;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	background: rgba(0, 0, 0, 0.5);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	z-index: 1000;
+	padding: 1rem;
+}
+
+.modal {
+	background: var(--surface);
+	border-radius: 12px;
+	padding: 2rem;
+	width: 100%;
+	max-width: 400px;
+	box-shadow: 0 20px 40px var(--shadow-heavy);
+	border: 1px solid var(--border);
+}
+
+.modal-header {
+	text-align: center;
+	margin-bottom: 2rem;
+}
+
+.modal-title {
+	font-size: 1.5rem;
+	font-weight: 600;
+	margin-bottom: 0.5rem;
+	color: var(--text-primary);
+}
+
+.modal-subtitle {
+	color: var(--text-secondary);
+	font-size: 0.9rem;
+}
+
+/* Alert styles */
+.alert {
+	padding: 0.75rem 1rem;
+	border-radius: 6px;
+	margin-bottom: 1rem;
+	display: none;
+}
+
+.alert.show {
+	display: block;
+}
+
+.alert-error {
+	background: rgba(244, 67, 54, 0.1);
+	color: var(--error);
+	border: 1px solid rgba(244, 67, 54, 0.2);
+}
+
+.alert-success {
+	background: rgba(76, 175, 80, 0.1);
+	color: var(--success);
+	border: 1px solid rgba(76, 175, 80, 0.2);
+}
+
+/* Utility classes */
+.text-center {
+	text-align: center;
+}
+
+.mt-1 { margin-top: 0.5rem; }
+.mt-2 { margin-top: 1rem; }
+.mb-1 { margin-bottom: 0.5rem; }
+.mb-2 { margin-bottom: 1rem; }
+
+/* Responsive */
+@media (max-width: 768px) {
+	.modal {
+		margin: 1rem;
+		padding: 1.5rem;
+	}
+}
+
+/* Focus styles for accessibility */
+.btn:focus-visible,
+.input:focus-visible {
+	outline: 2px solid var(--primary);
+	outline-offset: 2px;
+}
