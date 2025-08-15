@@ -112,7 +112,32 @@
                             </div>
                         </div>
                     </div>
-                    <button class="theme-toggle" onclick="logout()" title="Logout">👤</button>
+                    <div class="user-menu-container">
+                        <button class="user-menu-toggle" id="userMenuToggle" title="User Menu">👤</button>
+                        <div class="user-menu" id="userMenu" style="display: none;">
+                            <div class="user-menu-header">
+                                <span class="user-menu-name" id="userMenuName">User</span>
+                                <div class="user-menu-email" id="userMenuEmail"></div>
+                            </div>
+                            <div class="user-menu-items">
+                                <button class="user-menu-item" onclick="showAccountSettings()" title="Account Settings">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <circle cx="12" cy="12" r="3"/>
+                                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1.51-1V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82 1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                                    </svg>
+                                    Account Settings
+                                </button>
+                                <button class="user-menu-item" onclick="logout()" title="Logout">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                                        <polyline points="16,17 21,12 16,7"/>
+                                        <line x1="21" y1="12" x2="9" y2="12"/>
+                                    </svg>
+                                    Logout
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </header>
 
@@ -303,6 +328,19 @@
                 <button type="submit" class="auth-submit" id="loginSubmit">Sign In</button>
             </form>
 
+            <!-- OIDC Login Section -->
+            <div class="auth-divider">
+                <span>or</span>
+            </div>
+            
+            <button class="oidc-login-btn" id="oidcLoginBtn" onclick="loginWithAuthentik()" type="button">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                    <circle cx="12" cy="7" r="4"/>
+                </svg>
+                Continue with Authentik
+            </button>
+
             <!-- Register Form -->
             <form class="auth-form" id="registerForm" style="display: none;">
                 <div class="form-group">
@@ -339,6 +377,56 @@
                     <button type="submit" class="auth-btn primary" id="listFormSubmit">Create List</button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <!-- Account Settings Modal -->
+    <div class="auth-overlay" id="accountSettingsOverlay" style="display: none;">
+        <div class="auth-modal settings-modal">
+            <button class="settings-close-btn" onclick="hideAccountSettings()" title="Close">×</button>
+            <div class="auth-header">
+                <h2 class="auth-title">Account Settings</h2>
+            </div>
+            
+            <div class="settings-error" id="settingsError" style="display: none;"></div>
+            <div class="settings-success" id="settingsSuccess" style="display: none;"></div>
+            
+            <div class="settings-tabs">
+                <button class="settings-tab active" data-tab="authentication" onclick="switchSettingsTab('authentication')">Authentication</button>
+            </div>
+            
+            <!-- Authentication Tab -->
+            <div class="settings-tab-content" id="authenticationTab">
+                <div class="settings-section">
+                    <h3 class="settings-section-title">Current Account</h3>
+                    <div class="account-info">
+                        <div class="account-info-item">
+                            <span class="account-label">Username:</span>
+                            <span class="account-value" id="accountUsername">Loading...</span>
+                        </div>
+                        <div class="account-info-item">
+                            <span class="account-label">Email:</span>
+                            <span class="account-value" id="accountEmail">Loading...</span>
+                        </div>
+                        <div class="account-info-item">
+                            <span class="account-label">Provider:</span>
+                            <span class="account-badge" id="accountProvider">Loading...</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="settings-section">
+                    <h3 class="settings-section-title">Authentik Integration</h3>
+                    <div class="authentik-status" id="authentikStatus">
+                        <div class="authentik-info">
+                            <p class="authentik-description">Link your account with Authentik to use single sign-on and centralized authentication.</p>
+                            <div class="authentik-actions" id="authentikActions">
+                                <!-- Dynamic content will be inserted here -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 

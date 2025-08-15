@@ -209,6 +209,329 @@ function logout() {
     showAuthModal();
 }
 
+// OIDC Authentication functions
+async function loginWithAuthentik() {
+    try {
+        const oidcButton = document.getElementById('oidcLoginBtn');
+        oidcButton.disabled = true;
+        oidcButton.textContent = 'Redirecting...';
+        
+        const response = await apiRequest('/auth/oidc/login', {
+            method: 'POST',
+            body: JSON.stringify({})
+        });
+        
+        if (response.authorization_url) {
+            // Store current URL for return after auth
+            localStorage.setItem('preAuthUrl', window.location.href);
+            // Redirect to Authentik for authentication
+            window.location.href = response.authorization_url;
+        } else {
+            throw new Error('Failed to initiate OIDC authentication');
+        }
+    } catch (error) {
+        const oidcButton = document.getElementById('oidcLoginBtn');
+        oidcButton.disabled = false;
+        oidcButton.innerHTML = `
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                <circle cx="12" cy="7" r="4"/>
+            </svg>
+            Continue with Authentik
+        `;
+        showAuthError(error.message);
+    }
+}
+
+async function handleOIDCCallback() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const code = urlParams.get('code');
+    const state = urlParams.get('state');
+    const error = urlParams.get('error');
+    
+    if (error) {
+        showAuthError(`Authentication failed: ${error}`);
+        return;
+    }
+    
+    if (!code || !state) {
+        showAuthError('Invalid authentication response');
+        return;
+    }
+    
+    try {
+        const response = await apiRequest('/auth/oidc/callback', {
+            method: 'POST',
+            body: JSON.stringify({ code, state })
+        });
+        
+        if (response.token) {
+            authToken = response.token;
+            currentUser = response.user;
+            localStorage.setItem('authToken', authToken);
+            
+            // Clean up URL
+            window.history.replaceState({}, document.title, window.location.pathname);
+            
+            hideAuthModal();
+            
+            // Restore previous URL or load default list
+            const preAuthUrl = localStorage.getItem('preAuthUrl');
+            localStorage.removeItem('preAuthUrl');
+            
+            if (preAuthUrl && preAuthUrl !== window.location.href) {
+                window.location.href = preAuthUrl;
+            } else {
+                await initializeApp(true);
+            }
+        } else {
+            throw new Error('Authentication failed');
+        }
+    } catch (error) {
+        showAuthError(error.message);
+        // Clean up URL on error
+        window.history.replaceState({}, document.title, window.location.pathname);
+    }
+}
+
+// Account Settings functions
+function toggleUserMenu() {
+    const userMenu = document.getElementById('userMenu');
+    const userMenuToggle = document.getElementById('userMenuToggle');
+    const isVisible = userMenu.style.display === 'block';
+    
+    userMenu.style.display = isVisible ? 'none' : 'block';
+    
+    // Toggle active class on button for visual feedback
+    if (isVisible) {
+        userMenuToggle.classList.remove('active');
+        console.log('Removed active class from user menu toggle');
+    } else {
+        userMenuToggle.classList.add('active');
+        console.log('Added active class to user menu toggle');
+    }
+    
+    if (!isVisible && currentUser) {
+        // Update user info in menu
+        document.getElementById('userMenuName').textContent = currentUser.username || 'User';
+        document.getElementById('userMenuEmail').textContent = currentUser.email || '';
+    }
+}
+
+async function showAccountSettings() {
+    const overlay = document.getElementById('accountSettingsOverlay');
+    overlay.style.display = 'flex';
+    
+    // Hide user menu
+    document.getElementById('userMenu').style.display = 'none';
+    document.getElementById('userMenuToggle').classList.remove('active');
+    
+    // Pause polling
+    pausePolling();
+    
+    // Load account information
+    await loadAccountInfo();
+}
+
+function hideAccountSettings() {
+    const overlay = document.getElementById('accountSettingsOverlay');
+    overlay.style.display = 'none';
+    
+    // Clear any messages
+    clearSettingsMessages();
+    
+    // Resume polling
+    setTimeout(() => {
+        resumePolling();
+    }, 500);
+}
+
+function switchSettingsTab(tabName) {
+    // Update tab buttons
+    document.querySelectorAll('.settings-tab').forEach(tab => {
+        tab.classList.toggle('active', tab.dataset.tab === tabName);
+    });
+    
+    // Update tab content
+    document.querySelectorAll('.settings-tab-content').forEach(content => {
+        content.style.display = content.id === `${tabName}Tab` ? 'block' : 'none';
+    });
+}
+
+async function loadAccountInfo() {
+    try {
+        showSettingsLoading();
+        
+        // Get current user info
+        if (currentUser) {
+            document.getElementById('accountUsername').textContent = currentUser.username || 'N/A';
+            document.getElementById('accountEmail').textContent = currentUser.email || 'N/A';
+            
+            const providerBadge = document.getElementById('accountProvider');
+            const provider = currentUser.auth_provider || 'local';
+            providerBadge.textContent = provider.toUpperCase();
+            providerBadge.className = `account-badge ${provider}`;
+        }
+        
+        // Check OIDC status
+        await loadOIDCStatus();
+        
+    } catch (error) {
+        showSettingsError(`Failed to load account information: ${error.message}`);
+    }
+}
+
+async function loadOIDCStatus() {
+    try {
+        const response = await apiRequest('/auth/oidc/status');
+        const actionsContainer = document.getElementById('authentikActions');
+        
+        if (response.linked) {
+            // Account is linked
+            actionsContainer.innerHTML = `
+                <div class="authentik-status-info">
+                    <p><strong>✓ Linked</strong> - Your account is connected to Authentik</p>
+                    ${response.authentik_sub ? `<p><small>Authentik ID: ${response.authentik_sub}</small></p>` : ''}
+                    ${response.linked_at ? `<p><small>Linked on: ${formatDate(response.linked_at)}</small></p>` : ''}
+                </div>
+                <button class="authentik-action-btn danger" onclick="unlinkAuthentik()" ${!response.can_unlink ? 'disabled' : ''}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
+                        <rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>
+                        <line x1="10" y1="11" x2="10" y2="17"/>
+                        <line x1="14" y1="11" x2="14" y2="17"/>
+                    </svg>
+                    Unlink Authentik Account
+                </button>
+                ${!response.can_unlink ? `<p class="authentik-warning"><small>You cannot unlink your account because you don't have a local password set.</small></p>` : ''}
+            `;
+        } else {
+            // Account is not linked
+            actionsContainer.innerHTML = `
+                <button class="authentik-action-btn" onclick="linkAuthentik()">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                        <circle cx="12" cy="7" r="4"/>
+                    </svg>
+                    Link with Authentik
+                </button>
+            `;
+        }
+    } catch (error) {
+        document.getElementById('authentikActions').innerHTML = `
+            <p class="authentik-error">Failed to check Authentik status: ${error.message}</p>
+        `;
+    }
+}
+
+async function linkAuthentik() {
+    try {
+        const linkBtn = document.querySelector('.authentik-action-btn');
+        linkBtn.disabled = true;
+        linkBtn.textContent = 'Redirecting...';
+        
+        const response = await apiRequest('/auth/oidc/link', {
+            method: 'POST',
+            body: JSON.stringify({})
+        });
+        
+        if (response.authorization_url) {
+            // Store that we're in linking mode
+            localStorage.setItem('oidc_linking_mode', 'true');
+            localStorage.setItem('preAuthUrl', window.location.href);
+            // Redirect to Authentik for authentication
+            window.location.href = response.authorization_url;
+        } else {
+            throw new Error('Failed to initiate account linking');
+        }
+    } catch (error) {
+        const linkBtn = document.querySelector('.authentik-action-btn');
+        linkBtn.disabled = false;
+        linkBtn.innerHTML = `
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                <circle cx="12" cy="7" r="4"/>
+            </svg>
+            Link with Authentik
+        `;
+        showSettingsError(error.message);
+    }
+}
+
+async function unlinkAuthentik() {
+    if (!confirm('Are you sure you want to unlink your Authentik account? You will only be able to log in with your local password after this.')) {
+        return;
+    }
+    
+    try {
+        const unlinkBtn = document.querySelector('.authentik-action-btn.danger');
+        unlinkBtn.disabled = true;
+        unlinkBtn.textContent = 'Unlinking...';
+        
+        const response = await apiRequest('/auth/oidc/unlink', {
+            method: 'POST',
+            body: JSON.stringify({})
+        });
+        
+        if (response.success) {
+            showSettingsSuccess('Authentik account has been unlinked successfully.');
+            
+            // Update current user data
+            if (currentUser) {
+                currentUser.auth_provider = 'local';
+                currentUser.authentik_sub = null;
+            }
+            
+            // Reload account info
+            await loadAccountInfo();
+        } else {
+            throw new Error(response.message || 'Failed to unlink account');
+        }
+    } catch (error) {
+        const unlinkBtn = document.querySelector('.authentik-action-btn.danger');
+        unlinkBtn.disabled = false;
+        unlinkBtn.innerHTML = `
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
+                <rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>
+                <line x1="10" y1="11" x2="10" y2="17"/>
+                <line x1="14" y1="11" x2="14" y2="17"/>
+            </svg>
+            Unlink Authentik Account
+        `;
+        showSettingsError(error.message);
+    }
+}
+
+function showSettingsLoading() {
+    const actionsContainer = document.getElementById('authentikActions');
+    actionsContainer.innerHTML = '<p>Loading...</p>';
+}
+
+function showSettingsError(message) {
+    const errorEl = document.getElementById('settingsError');
+    errorEl.textContent = message;
+    errorEl.style.display = 'block';
+    setTimeout(() => errorEl.style.display = 'none', 5000);
+}
+
+function showSettingsSuccess(message) {
+    const successEl = document.getElementById('settingsSuccess');
+    successEl.textContent = message;
+    successEl.style.display = 'block';
+    setTimeout(() => successEl.style.display = 'none', 3000);
+}
+
+function clearSettingsMessages() {
+    document.getElementById('settingsError').style.display = 'none';
+    document.getElementById('settingsSuccess').style.display = 'none';
+}
+
+function formatDate(timestamp) {
+    const date = new Date(timestamp);
+    return date.toLocaleDateString();
+}
+
 async function loadGroceryMemory() {
     try {
         const response = await apiRequest('/groceries/memory?limit=100');
@@ -3160,6 +3483,12 @@ document.addEventListener('DOMContentLoaded', function() {
         clearAllBtn.addEventListener('click', window.markAllNotificationsRead);
     }
     
+    // User menu event listeners
+    const userMenuToggle = document.getElementById('userMenuToggle');
+    if (userMenuToggle) {
+        userMenuToggle.addEventListener('click', toggleUserMenu);
+    }
+    
     // Click outside to close dropdowns
     document.addEventListener('click', (e) => {
         // Close shopping list dropdown
@@ -3179,7 +3508,53 @@ document.addEventListener('DOMContentLoaded', function() {
                 notificationDropdown.style.display = 'none';
             }
         }
+        
+        // Close user menu
+        const userMenuContainer = document.querySelector('.user-menu-container');
+        if (userMenuContainer && !userMenuContainer.contains(e.target)) {
+            const userMenu = document.getElementById('userMenu');
+            const userMenuToggle = document.getElementById('userMenuToggle');
+            if (userMenu && userMenu.style.display !== 'none') {
+                userMenu.style.display = 'none';
+                userMenuToggle.classList.remove('active');
+            }
+        }
     });
+
+    // Account Settings modal event listeners
+    const accountSettingsOverlay = document.getElementById('accountSettingsOverlay');
+    if (accountSettingsOverlay) {
+        accountSettingsOverlay.addEventListener('click', (e) => {
+            // Close modal when clicking on overlay background
+            if (e.target === accountSettingsOverlay) {
+                hideAccountSettings();
+            }
+        });
+    }
+
+    // ESC key to close modals
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            // Close account settings modal
+            const accountModal = document.getElementById('accountSettingsOverlay');
+            if (accountModal && accountModal.style.display === 'flex') {
+                hideAccountSettings();
+            }
+            
+            // Close auth modal
+            const authModal = document.getElementById('authOverlay');
+            if (authModal && authModal.style.display === 'flex') {
+                hideAuthModal();
+            }
+        }
+    });
+
+    // Check for OIDC callback before initializing
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.has('code') && urlParams.has('state')) {
+        handleOIDCCallback();
+        return; // Don't initialize normally, let callback handle it
+    }
 
     // Initialize
     loadTheme();

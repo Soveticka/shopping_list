@@ -15,6 +15,8 @@ from psycopg2.extras import RealDictCursor
 import bcrypt
 from dotenv import load_dotenv
 from marshmallow import Schema, fields, ValidationError
+from oidc_client import create_oidc_client
+from user_sync import sync_user_with_oidc, UserSyncManager
 
 # Load environment variables
 load_dotenv()
@@ -27,7 +29,11 @@ app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(days=7)
 
 # Initialize extensions
 jwt = JWTManager(app)
-CORS(app, origins=os.getenv('FRONTEND_URL', 'http://localhost:3000'))
+CORS(app, origins=[
+    os.getenv('FRONTEND_URL', 'http://localhost:3000'),
+    'http://localhost:3000',
+    'http://192.168.1.27:3000'
+])
 
 # Database configuration
 DB_CONFIG = {
@@ -1393,6 +1399,199 @@ def remove_share(list_id, share_id):
     except Exception as e:
         print(f"Remove share error: {e}")
         return jsonify({'error': 'Failed to remove user from list'}), 500
+
+# OIDC Authentication Endpoints
+
+@app.route('/api/auth/oidc/login', methods=['POST'])
+def oidc_login():
+    """Initiate OIDC authentication flow"""
+    try:
+        oidc_client = create_oidc_client()
+        state = secrets.token_urlsafe(32)
+        
+        authorization_url, _ = oidc_client.get_authorization_url(state=state)
+        
+        # Store state in session for validation (in production, use Redis or database)
+        # For now, we'll include it in the response and validate in callback
+        
+        return jsonify({
+            'authorization_url': authorization_url,
+            'state': state
+        }), 200
+        
+    except Exception as e:
+        print(f"OIDC login error: {e}")
+        return jsonify({'error': 'Failed to initiate OIDC login'}), 500
+
+@app.route('/api/auth/oidc/callback', methods=['POST'])
+def oidc_callback():
+    """Handle OIDC callback and authenticate user"""
+    try:
+        data = request.json
+        code = data.get('code')
+        state = data.get('state')
+        
+        if not code or not state:
+            return jsonify({'error': 'Missing authorization code or state'}), 400
+        
+        # Initialize OIDC client
+        oidc_client = create_oidc_client()
+        
+        # Exchange code for tokens
+        tokens = oidc_client.exchange_code_for_token(code, state)
+        id_token = tokens.get('id_token')
+        access_token = tokens.get('access_token')
+        
+        if not id_token:
+            return jsonify({'error': 'No ID token received'}), 400
+        
+        # Validate ID token
+        id_token_payload = oidc_client.validate_id_token(id_token)
+        
+        # Get additional user info if available
+        user_info = None
+        if access_token:
+            try:
+                user_info = oidc_client.get_user_info(access_token)
+            except Exception:
+                # User info is optional, continue without it
+                pass
+        
+        # Extract user profile
+        oidc_profile = oidc_client.extract_user_profile(id_token_payload, user_info)
+        
+        # Get client info for audit
+        client_ip = request.environ.get('REMOTE_ADDR')
+        user_agent = request.headers.get('User-Agent')
+        
+        # Check if this is a linking flow
+        if state.startswith('link_'):
+            # Extract user_id from linking state
+            try:
+                _, user_id_str, _ = state.split('_', 2)
+                user_id = int(user_id_str)
+                
+                with get_db_connection() as conn:
+                    sync_manager = UserSyncManager(conn)
+                    
+                    # Check if this Authentik account is already linked
+                    existing_user = sync_manager.find_user_by_authentik_sub(oidc_profile['sub'])
+                    if existing_user:
+                        return jsonify({'error': 'This Authentik account is already linked to another user'}), 400
+                    
+                    # Link the account
+                    if sync_manager.link_authentik_account(user_id, oidc_profile):
+                        sync_manager.log_auth_event(user_id, 'oidc', 'account_link', True, client_ip, user_agent)
+                        return jsonify({'success': True, 'message': 'Account successfully linked with Authentik'}), 200
+                    else:
+                        return jsonify({'error': 'Failed to link account'}), 500
+                        
+            except ValueError:
+                return jsonify({'error': 'Invalid linking state'}), 400
+        
+        # Normal login flow - synchronize user account
+        with get_db_connection() as conn:
+            user_data, message = sync_user_with_oidc(conn, oidc_profile, client_ip, user_agent)
+        
+        if not user_data:
+            return jsonify({'error': message}), 400
+        
+        # Create JWT token for the application
+        access_token = create_access_token(identity=str(user_data['id']))
+        
+        return jsonify({
+            'message': 'OIDC authentication successful',
+            'user': {
+                'id': user_data['id'],
+                'username': user_data['username'],
+                'email': user_data['email'],
+                'auth_provider': user_data.get('auth_provider', 'authentik')
+            },
+            'token': access_token,
+            'sync_message': message
+        }), 200
+        
+    except Exception as e:
+        print(f"OIDC callback error: {e}")
+        return jsonify({'error': 'OIDC authentication failed'}), 500
+
+@app.route('/api/auth/oidc/link', methods=['POST'])
+@jwt_required()
+def link_oidc_account():
+    """Initiate OIDC authentication flow for account linking"""
+    try:
+        user_id = int(get_jwt_identity())
+        
+        # Store user ID in session for linking after OIDC callback
+        oidc_client = create_oidc_client()
+        state = secrets.token_urlsafe(32)
+        
+        # Store linking state in session or database
+        # For simplicity, we'll encode user_id in the state parameter
+        linking_state = f"link_{user_id}_{state}"
+        
+        authorization_url, _ = oidc_client.get_authorization_url(state=linking_state)
+        
+        return jsonify({
+            'authorization_url': authorization_url,
+            'state': linking_state
+        }), 200
+                
+    except Exception as e:
+        print(f"OIDC link error: {e}")
+        return jsonify({'error': 'Failed to link OIDC account'}), 500
+
+@app.route('/api/auth/oidc/unlink', methods=['POST'])
+@jwt_required()
+def unlink_oidc_account():
+    """Unlink Authentik account from current user"""
+    try:
+        user_id = int(get_jwt_identity())
+        
+        with get_db_connection() as conn:
+            sync_manager = UserSyncManager(conn)
+            
+            if sync_manager.unlink_authentik_account(user_id):
+                client_ip = request.environ.get('REMOTE_ADDR')
+                user_agent = request.headers.get('User-Agent')
+                sync_manager.log_auth_event(user_id, 'oidc', 'account_unlink', True, client_ip, user_agent)
+                
+                return jsonify({'message': 'Authentik account successfully unlinked'}), 200
+            else:
+                return jsonify({'error': 'Cannot unlink account - you need a local password to maintain access'}), 400
+                
+    except Exception as e:
+        print(f"OIDC unlink error: {e}")
+        return jsonify({'error': 'Failed to unlink OIDC account'}), 500
+
+@app.route('/api/auth/oidc/status', methods=['GET'])
+@jwt_required()
+def oidc_status():
+    """Get OIDC linking status for current user"""
+    try:
+        user_id = int(get_jwt_identity())
+        
+        with get_db_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute("""
+                    SELECT authentik_sub, auth_provider, linked_at, last_oidc_login
+                    FROM users WHERE id = %s
+                """, (user_id,))
+                user = cur.fetchone()
+                
+                if not user:
+                    return jsonify({'error': 'User not found'}), 404
+                
+                return jsonify({
+                    'is_linked': bool(user['authentik_sub']),
+                    'auth_provider': user['auth_provider'],
+                    'linked_at': user['linked_at'].isoformat() if user['linked_at'] else None,
+                    'last_oidc_login': user['last_oidc_login'].isoformat() if user['last_oidc_login'] else None
+                }), 200
+                
+    except Exception as e:
+        print(f"OIDC status error: {e}")
+        return jsonify({'error': 'Failed to get OIDC status'}), 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.getenv('PORT', 3001)), debug=os.getenv('NODE_ENV') != 'production')
