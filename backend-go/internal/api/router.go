@@ -5,12 +5,17 @@ import (
 	"shopping-list/internal/config"
 	"shopping-list/internal/database"
 	"shopping-list/internal/handlers"
+	"shopping-list/internal/websocket"
 
 	"github.com/gin-gonic/gin"
 )
 
 func SetupRouter(db *database.DB, cfg *config.Config) *gin.Engine {
 	router := gin.Default()
+
+	// Initialize WebSocket hub
+	hub := websocket.NewHub()
+	go hub.Run()
 
 	// Custom CORS middleware
 	router.Use(func(c *gin.Context) {
@@ -51,6 +56,7 @@ func SetupRouter(db *database.DB, cfg *config.Config) *gin.Engine {
 	sharingHandler := handlers.NewSharingHandler(db)
 	memoryHandler := handlers.NewMemoryHandler(db)
 	notificationHandler := handlers.NewNotificationHandler(db)
+	webSocketHandler := handlers.NewWebSocketHandler(hub)
 
 	// Public routes
 	api := router.Group("/api")
@@ -143,6 +149,15 @@ func SetupRouter(db *database.DB, cfg *config.Config) *gin.Engine {
 			notifications.PUT("/:id/read", notificationHandler.MarkAsRead)
 			notifications.DELETE("/:id", notificationHandler.DeleteNotification)
 			notifications.POST("/mark-all-read", notificationHandler.MarkAllAsRead)
+		}
+
+		// WebSocket routes
+		ws := protected.Group("/ws")
+		{
+			ws.GET("/connect", webSocketHandler.HandleWebSocket)
+			ws.GET("/online-users", webSocketHandler.GetOnlineUsers)
+			ws.POST("/broadcast/lists/:id", webSocketHandler.BroadcastToList)
+			ws.POST("/broadcast/users/:userId", webSocketHandler.BroadcastNotification)
 		}
 	}
 
