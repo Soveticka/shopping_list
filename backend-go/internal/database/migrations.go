@@ -64,5 +64,52 @@ func Migrate(db *DB) error {
 		}
 	}
 
+	// Check and create notifications table
+	var notificationTableExists bool
+	err = db.QueryRow(context.Background(),
+		"SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'notifications')").Scan(&notificationTableExists)
+	
+	if err != nil {
+		return fmt.Errorf("failed to check notifications table: %w", err)
+	}
+
+	if !notificationTableExists {
+		_, err = db.Exec(context.Background(), `
+			CREATE TABLE notifications (
+				id SERIAL PRIMARY KEY,
+				user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+				type VARCHAR(50) NOT NULL,
+				title VARCHAR(255) NOT NULL,
+				message TEXT NOT NULL,
+				data JSONB,
+				is_read BOOLEAN NOT NULL DEFAULT FALSE,
+				created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+				updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+			);
+
+			CREATE INDEX idx_notifications_user_id ON notifications(user_id);
+			CREATE INDEX idx_notifications_user_id_unread ON notifications(user_id, is_read);
+			CREATE INDEX idx_notifications_created_at ON notifications(created_at);
+			CREATE INDEX idx_notifications_type ON notifications(type);
+
+			CREATE OR REPLACE FUNCTION update_notification_updated_at()
+			RETURNS TRIGGER AS $$
+			BEGIN
+				NEW.updated_at = NOW();
+				RETURN NEW;
+			END;
+			$$ LANGUAGE plpgsql;
+
+			CREATE TRIGGER trigger_update_notification_updated_at
+				BEFORE UPDATE ON notifications
+				FOR EACH ROW
+				EXECUTE FUNCTION update_notification_updated_at();
+		`)
+		
+		if err != nil {
+			return fmt.Errorf("failed to create notifications table: %w", err)
+		}
+	}
+
 	return nil
 }

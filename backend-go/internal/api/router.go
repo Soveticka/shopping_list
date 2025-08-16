@@ -50,6 +50,7 @@ func SetupRouter(db *database.DB, cfg *config.Config) *gin.Engine {
 	itemHandler := handlers.NewItemHandler(db)
 	sharingHandler := handlers.NewSharingHandler(db)
 	memoryHandler := handlers.NewMemoryHandler(db)
+	notificationHandler := handlers.NewNotificationHandler(db)
 
 	// Public routes
 	api := router.Group("/api")
@@ -135,9 +136,13 @@ func SetupRouter(db *database.DB, cfg *config.Config) *gin.Engine {
 		// Notification routes
 		notifications := protected.Group("/notifications")
 		{
-			notifications.GET("", userHandler.GetNotifications)
-			notifications.POST("/:id/read", userHandler.MarkNotificationRead)
-			notifications.POST("/read-all", userHandler.MarkAllNotificationsRead)
+			notifications.GET("", notificationHandler.GetNotifications)
+			notifications.POST("", notificationHandler.CreateNotification)
+			notifications.GET("/unread-count", notificationHandler.GetUnreadCount)
+			notifications.GET("/:id", notificationHandler.GetNotification)
+			notifications.PUT("/:id/read", notificationHandler.MarkAsRead)
+			notifications.DELETE("/:id", notificationHandler.DeleteNotification)
+			notifications.POST("/mark-all-read", notificationHandler.MarkAllAsRead)
 		}
 	}
 
