@@ -48,6 +48,8 @@ func SetupRouter(db *database.DB, cfg *config.Config) *gin.Engine {
 	userHandler := handlers.NewUserHandler(db)
 	listHandler := handlers.NewListHandler(db)
 	itemHandler := handlers.NewItemHandler(db)
+	sharingHandler := handlers.NewSharingHandler(db)
+	memoryHandler := handlers.NewMemoryHandler(db)
 
 	// Public routes
 	api := router.Group("/api")
@@ -98,10 +100,17 @@ func SetupRouter(db *database.DB, cfg *config.Config) *gin.Engine {
 			lists.POST("/:id/default", listHandler.SetDefaultList)
 
 			// List sharing
-			lists.POST("/:id/share", listHandler.ShareList)
-			lists.GET("/:id/shares", listHandler.GetListShares)
-			lists.DELETE("/:id/shares/:shareId", listHandler.RemoveShare)
-			lists.POST("/shares/:shareId/respond", listHandler.RespondToShare)
+			lists.POST("/:id/share", sharingHandler.ShareList)
+			lists.GET("/:id/shares", sharingHandler.GetListShares)
+			lists.DELETE("/:id/shares/:shareId", sharingHandler.RemoveShare)
+			lists.POST("/:id/generate-token", sharingHandler.GenerateShareToken)
+		}
+
+		// Sharing routes
+		sharing := protected.Group("/sharing")
+		{
+			sharing.POST("/join", sharingHandler.JoinByToken)
+			sharing.GET("/lists", sharingHandler.GetSharedLists)
 		}
 
 		// Item routes - using consistent :id parameter
@@ -118,8 +127,9 @@ func SetupRouter(db *database.DB, cfg *config.Config) *gin.Engine {
 		// Memory/autocomplete routes
 		memory := protected.Group("/memory")
 		{
-			memory.GET("", userHandler.GetGroceryMemory)
-			memory.GET("/stats", userHandler.GetMemoryStats)
+			memory.GET("/items", memoryHandler.GetMemory)
+			memory.GET("/categories", memoryHandler.GetCategories)
+			memory.GET("/stats", memoryHandler.GetMemoryStats)
 		}
 
 		// Notification routes
